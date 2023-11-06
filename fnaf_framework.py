@@ -6,9 +6,9 @@ from datetime import datetime
 import logging
 import shutil
 from fnafobjects.fnaf import Fnafobj
+import subprocess
 
 pyautogui.PAUSE = 1
-import subprocess
 
 class MyBot:
     """This is the automation web driver object.
@@ -141,11 +141,17 @@ class MyBot:
         self.logger.info(f"Clicked at the location {xy_tuple}.")
 
 
-
-    def use_camera(self):
+    # def am_i_in_cams(self):
+    #     if self.check_image_visible(self.cam_image, "camera_image"):
+    #         return True
+    #     else:
+    #         return False
+    
+    
+    def use_camera(self, cam_image):
         """Opens/closes the camera"""
-        if self.am_i_in_cams():
-            print("Opening cams...")
+        if self.check_image_visible(cam_image, "camera image"):
+            self.logger("Opening cams...")
             pyautogui.moveTo(551, 497)
             pyautogui.moveTo(551, 680, 0.5, pyautogui.easeOutQuad)
         else:
@@ -153,30 +159,33 @@ class MyBot:
             pyautogui.moveTo(551, 497)
             pyautogui.moveTo(551, 680, 0.5, pyautogui.easeOutQuad)
 
-    def left_door(self):
+    def left_door(self, cam_image):
         """Closes left door"""
-        if self.am_i_in_cams():
-            self.use_camera()
+        # if self.am_i_in_cams():
+        if self.check_image_visible(cam_image, "camera image"):
+            self.use_camera(cam_image)
             pyautogui.moveTo(56, 343, 0.5, pyautogui.easeOutQuad)
             pyautogui.leftClick()
         else:
             pyautogui.moveTo(56, 343, 0.5, pyautogui.easeOutQuad)
             pyautogui.leftClick()
         
-    def right_door(self):
+    def right_door(self, cam_image):
         """Closes right door"""
-        if self.am_i_in_cams():
-            self.use_camera()
+        # if self.am_i_in_cams():
+        if self.check_image_visible(cam_image, "camera image"):
+            self.use_camera(cam_image)
             pyautogui.moveTo(1218, 343, 0.5, pyautogui.easeOutQuad)
             pyautogui.leftClick()
         else:
             pyautogui.moveTo(1218, 343, 0.5, pyautogui.easeOutQuad)
             pyautogui.leftClick()
 
-    def left_light(self):
+    def left_light(self, cam_image):
         """Uses left lights"""
-        if self.am_i_in_cams():
-            self.use_camera()
+        # if self.am_i_in_cams():
+        if self.check_image_visible(cam_image, "camera image"):
+            self.use_camera(cam_image)
             pyautogui.moveTo(56, 446, 0.5, pyautogui.easeOutQuad)
             time.sleep(1)
             pyautogui.leftClick()
@@ -186,10 +195,11 @@ class MyBot:
             pyautogui.leftClick()
         print("Checking for bonnie...")
 
-    def right_light(self):
+    def right_light(self, cam_image):
         """Uses right lights"""
-        if self.am_i_in_cams():
-            self.use_camera()
+        # if self.am_i_in_cams():
+        if self.check_image_visible(cam_image, "camera image"):
+            self.use_camera(cam_image)
             pyautogui.moveTo(1218, 446, 0.5, pyautogui.easeOutQuad)
             time.sleep(1)
             pyautogui.leftClick()
@@ -200,25 +210,22 @@ class MyBot:
         print("Checking for chica...")
 
 
-    def am_i_in_cams(self):
-        if self.check_image_visible(self.cam_image, "camera_image"):
-            return True
-        else:
-            return False
 
 
-    def check_stage(self):
-        if self.am_i_in_cams():
+    def check_stage(self, cam_image):
+        # if self.am_i_in_cams():
+        if self.check_image_visible(cam_image, "camera image"):
             pyautogui.moveTo(979, 345)
         else:
-            self.use_camera()
+            self.use_camera(cam_image)
             pyautogui.moveTo(979, 345)
 
-    def check_foxy(self):
-        if self.am_i_in_cams():
+    def check_foxy(self, cam_image):
+        # if self.am_i_in_cams():
+        if self.check_image_visible(cam_image, "camera image"):
             pyautogui.moveTo(932, 476)
         else:
-            self.use_camera()
+            self.use_camera(cam_image)
             pyautogui.moveTo(932, 476)
 
 
@@ -226,4 +233,4 @@ class MyBot:
 
 if __name__ == "__main__":
     testbot = MyBot()
-    testbot.left_door()
+    testbot.left_door(Fnafobj.camera)
