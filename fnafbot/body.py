@@ -46,6 +46,7 @@ CAPTURE_LATENCY = 0.015
 SCALE_MIN_SIGHTINGS = 20
 SCALE_MIN_SPAN_TICKS = 30
 SCALE_RANGE = (0.995, 1.02)
+FIT_WINDOW_TICKS = 120           # fit the clock to the last two minutes of sightings
 # A power change only counts for the fit if the HUD was looked at this
 # shortly before (so the moment of the change is known to +- half of it).
 SIGHTING_MAX_GAP = 0.12
@@ -181,7 +182,9 @@ class RealBody:
         typical capture delay) is the night start. Sightings far off the
         line - the extra charge for Foxy's bang - are dropped and the line
         fitted again."""
-        sightings = self._power_sightings
+        # Only the recent sightings: the game's pace changes with what is
+        # on screen, so an all-night line would lag behind the current speed.
+        sightings = [s for s in self._power_sightings if s[0] >= self._power_sightings[-1][0] - FIT_WINDOW_TICKS]
         if len(sightings) < SCALE_MIN_SIGHTINGS or sightings[-1][0] - sightings[0][0] < SCALE_MIN_SPAN_TICKS:
             return
         ticks = np.array([k for k, _ in sightings], dtype=float)
@@ -241,6 +244,25 @@ class RealBody:
             return True
         return False
 
+    def _note_hud(self, hud, stamp: float) -> None:
+        """Book a HUD reading taken at ``stamp``: the clock learns from power
+        changes, and the power is traced to the log now and then. Called for
+        office frames AND camera frames (the HUD shows on both), so the clock
+        keeps following the game's speed while the monitor is up - the game
+        runs at a slightly different pace then (measured with
+        tools/measure_ticks.py)."""
+        if hud.power is not None:
+            if self.last_power is not None and hud.power != self.last_power:
+                # The change happened somewhere between the previous look at
+                # the HUD and this one.
+                self._calibrate(stamp, gap=stamp - self.last_hud_seen)
+            self.last_power = hud.power
+            if self.now() - self.power_logged_at >= POWER_LOG_EVERY:
+                self.power_logged_at = self.now()
+                log.info("power %d%% at %.0f s (usage %s)", hud.power, self.now(), hud.usage)
+        self.last_hud_seen = stamp
+        self.ctl.hud = hud
+
     def _observe(self) -> np.ndarray:
         """Grab a frame, update HUD-based state (power, night over, clock)."""
         self._check_stop()
@@ -252,18 +274,7 @@ class RealBody:
         if hud.visible:
             self.hud_missing_since = None
             self.hud_missing_count = 0
-            if hud.power is not None:
-                if self.last_power is not None and hud.power != self.last_power:
-                    # The change happened somewhere between the previous
-                    # look at the HUD and this one.
-                    self._calibrate(stamp, gap=stamp - self.last_hud_seen)
-                self.last_power = hud.power
-                # A power trace in the log, for working out where it went.
-                if self.now() - self.power_logged_at >= POWER_LOG_EVERY:
-                    self.power_logged_at = self.now()
-                    log.info("power %d%% at %.0f s (usage %s)", hud.power, self.now(), hud.usage)
-            self.last_hud_seen = stamp
-            self.ctl.hud = hud
+            self._note_hud(hud, stamp)
         else:
             # The HUD can be hidden for a few frames (e.g. by the monitor
             # animation). Only a HUD that stays missing across several looks
@@ -429,7 +440,9 @@ class RealBody:
         """Read a camera picture: {'occupants', 'foxy_stage', 'visible'}."""
         deadline = time.perf_counter() + 0.4
         while time.perf_counter() < deadline:
-            if self.vision.current_camera(self.ctl.window.grab()) == camera:
+            frame = self.ctl.window.grab()
+            self._note_hud_on(frame)
+            if self.vision.current_camera(frame) == camera:
                 break
         # Right after switching cameras the picture is covered by a burst of
         # static; wait for it to fade (only needed after a switch).
@@ -444,6 +457,7 @@ class RealBody:
             if i:
                 time.sleep(0.03)
             frame = self.ctl.window.grab()
+            self._note_hud_on(frame)
             frames.append(frame)
             readings.append(self.vision.read_camera(frame, camera))
         best = max(range(len(readings)), key=lambda i: readings[i].margin)
@@ -459,6 +473,12 @@ class RealBody:
             "foxy_stage": reading.foxy_stage,
             "visible": confident,
         }
+
+    def _note_hud_on(self, frame: np.ndarray) -> None:
+        """Read the HUD off a camera frame (if it shows) for the clock."""
+        hud = self.vision.read_hud(frame)
+        if hud.visible:
+            self._note_hud(hud, time.perf_counter())
 
     def power(self) -> int:
         return self.last_power if self.last_power is not None else 0

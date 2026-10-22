@@ -326,3 +326,42 @@ clicks are ignored while viewing, and Foxy's ticks were "covered" by a
 flip that never ended), and the next action paid for lowering it. Now the
 monitor only counts as down after 0.2 s without a label, and a believed-up
 monitor is always swiped.
+
+---
+
+## 2026-10-22 - Measuring Bonnie's ticks: the game's pace depends on the screen
+
+Night 4 was lost twice more to just-in-time clicks that should have been
+fine, so the tick model itself went under the microscope.
+`tools/measure_ticks.py` shuts both doors, keeps the monitor on Bonnie's
+camera and timestamps the moment his picture changes (a room change only
+happens on his tick). Two models were compared: nominal (tick k at
+k x 4.97 game seconds) and "whole frames" (the timer re-arms on a whole
+frame: 299 frames = 4.9833 s per tick, drifting 0.8 s later by 300 s).
+
+Result (clock fitted in the office during the first 36 s):
+
+```
+leaves 1B   k=12  nominal +0.21 s   frames +0.05 s
+leaves 5    k=16  nominal -0.02 s   frames -0.23 s
+leaves 1B   k=18  nominal -0.20 s   frames -0.44 s
+leaves 5    k=33  nominal -0.44 s   frames -0.88 s
+leaves 1B   k=40  nominal -0.82 s   frames -1.36 s
+```
+
+The ticks come *earlier* and earlier than the nominal model, and the
+frames model predicts the opposite, so that one is dead. The early
+drift is the clock: it was fitted while the office was showing
+(1.0065 real s per game second), but with the monitor up the game runs at
+a different pace (about 1.002). The game's speed depends on what it is
+drawing, and the fit stopped updating because the HUD was only read on
+office frames.
+
+**Fix.** The HUD is now read off every camera frame too, and the clock is
+fitted to the last two minutes of power changes instead of the whole
+night, so it follows the current pace.
+
+**Also noted (from the user):** the hall light works with the door shut,
+and on the right side Chica's window is beside the door, so a peek on
+the right may not need the door open at all. The simulator assumes a
+shut door hides both sides; to verify on the right and exploit (TODO).
