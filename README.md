@@ -131,6 +131,23 @@ python -m pytest tests
 | `docs/STRATEGY.md` | How the bot uses those rules |
 | `docs/DEVLOG.md` | Bugs found on the live game and how they were fixed |
 
+## Live results (2026-10-22)
+
+| Night | Result on the real game | Power left |
+|---|---|---|
+| 1 | won | 41 % |
+| 2 | won | 16 % |
+| 3 | won (after three lost replays, see the devlog) | 34 % |
+| 4 | won | 8 % |
+| 5 | won | 2 % |
+| 6th Night | runs out of power before 6 AM (nobody gets in) | - |
+| 20/20/20/20 | not yet | - |
+
+Every lost night on the way is written up in [docs/DEVLOG.md](docs/DEVLOG.md):
+what the log showed, what the game's own code says, the measurement that
+settled it, and the fix. The 6th Night and 4/20 are a scheduling-efficiency
+problem (door cycles cost power charges), not a safety one.
+
 ## The status panel
 
 While playing, a small panel at the top of the screen shows what the bot is
