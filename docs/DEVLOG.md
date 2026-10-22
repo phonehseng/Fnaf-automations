@@ -79,3 +79,49 @@ reliable measurement.
 Tools written for this investigation: `tools/tick_model_check.py` (tests
 timer models against logged doorway sightings), `tools/measure_fps.py`,
 `tools/measure_timer.py`.
+
+**Checked live.** The replayed Night 3 (`logs/2026-10-22_02-54-24.log`)
+fitted the clock from the power readout within the first minute:
+"game second = 1.0056 real s, night start moved +0.275 s", then
+1.0053 s. So the drift is real, it varies a little per session, and the
+fit catches it early.
+
+---
+
+## 2026-10-22 - Replayed Night 3: Chica got in at 453 s (two deadlines 0.9 s apart)
+
+Same night, new clock, lost again - differently. The last seconds:
+
+```
+449.17s  BONNIE AT LEFT DOOR - closing at 451.77s, before their move at 452.27s
+449.90s  Camera flip to hold Foxy (resting on 4B)
+451.87s  BONNIE AT LEFT DOOR - door closed (just in time)
+451.92s  Looking for Chica (right light)        <- Chica's tick is at 453.18 s
+453.17s  Chica: light did not come on - retrying
+453.57s  Chica: light did not come on - retrying
+454.70s  CHICA AT RIGHT DOOR - door closed (cannot see the doorway)
+         Night over (jumpscare)
+```
+
+Chica's last check (empty) was at 446.9 s; her tick at 448.2 s could have
+brought her to the window, so a right-light check was due before her next
+tick at 453.2 s. Bonnie's just-in-time door click was planned for 451.8 s.
+The scheduler saw that the Chica check would collide with that click and
+*deferred* it ("it can wait until after the planned door click") - the rule
+only required the deadline to be more than 1 s after the click's start.
+But after the click the bot still had to pan right (0.55 s), wait out the
+click cooldown (0.19 s) and run the light check (0.3 s): it reached the
+light at ~452.5 s and nothing happened. Then it retried twice *after*
+Chica's tick instead of shutting the door.
+
+Two fixes in `Brain`:
+1. A deferred check must fit **between the planned click and its own
+   deadline** (`close_at + cooldown + pan + light check`); otherwise the
+   planned door is shut early ("schedule conflict") and the check runs
+   first.
+2. A light that does not come on within ~1.3 s of their tick shuts the door
+   immediately (`LIGHT_FAIL_SHUT_LEAD`) instead of retrying.
+
+Also seen: "light did not come on" happened 9 times in the campaign without
+anyone inside. Those clicks are lost somewhere between the mouse and the
+game; the retry handles it, but it is worth measuring (TODO).
