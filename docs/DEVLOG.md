@@ -911,7 +911,7 @@ Nobody got in; the battery ran out. The log explains it: not a single lag
 sample all night (0 departure watches), so every margin stayed at the wide
 "not measured yet" setting. From ~180 s Bonnie's door went into a loop of
 blind reopens ("Bonnie may still be there - door open until ..., then shut
-again", 40+ times): opened after his tick, shut again before the next,
+again", 14 times; one watch was tried all night): opened after his tick, shut again before the next,
 never looked through - and a watch only counts on the first tick after he
 was last SEEN at the door, so once he was not re-seen no watch could ever
 be planned again. Foxy cost the rest: views that came up ~0.1 s later than
