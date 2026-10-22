@@ -433,6 +433,10 @@ reading came from a lost click, not from her timer. Lost door clicks are
 therefore a problem of their own: the bot now saves a screenshot whenever
 the door button's lamp says a click was ignored.
 
+**Night 4 won** (07:14, twelfth attempt of the day): 6 AM screen at
+533.4 s, 8 % power left, 2 of 40 Foxy flips uncovered, one door click
+lost and retried. Night 5 started straight after with the same code.
+
 **Also noted (from the user):** the hall light works with the door shut,
 and on the right side Chica's window is beside the door, so a peek on
 the right may not need the door open at all. The simulator assumes a
