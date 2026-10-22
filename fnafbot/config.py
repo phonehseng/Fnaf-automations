@@ -26,8 +26,8 @@ GAME_EXE = Path(
 # Title of the game window (used to find it on screen).
 WINDOW_TITLE = "Five Nights at Freddy's"
 
-# FNAF 1 keeps its save data in a tiny INI file here (e.g. "level=3").
-SAVE_FILE = Path(os.environ.get("APPDATA", "")) / "MMFApplications" / "freddy"
+# Note: the bot never reads or writes the game's save file (or any other game
+# file) while playing. Nights are chosen through the game's own menus.
 
 # ---------------------------------------------------------------------------
 # Project folders
@@ -41,6 +41,9 @@ ASSET_CACHE = PROJECT_ROOT / "cache" / "assets"
 
 # Each run writes a log file here, plus screenshots of anything surprising.
 LOG_DIR = PROJECT_ROOT / "logs"
+
+# Small pictures of every doorway decision (for checking the bot's eyes).
+EVIDENCE_DIR = LOG_DIR / "doorway"
 
 # ---------------------------------------------------------------------------
 # Safety / control

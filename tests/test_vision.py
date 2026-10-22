@@ -14,7 +14,10 @@ import pytest
 
 from fnafbot import assets, catalog, config
 
-pytestmark = pytest.mark.skipif(not config.GAME_EXE.exists(), reason="FNAF is not installed")
+pytestmark = pytest.mark.skipif(
+    not any(config.ASSET_CACHE.glob("extracted_v*.txt")),
+    reason="reference pictures not set up (run: python -m fnafbot --setup)",
+)
 
 # Handles of full-screen TV static frames in the game (1280 x 720).
 STATIC_FRAMES = [13, 14, 15, 16, 17, 18, 19]

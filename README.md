@@ -36,24 +36,51 @@ power at all. Details: [docs/STRATEGY.md](docs/STRATEGY.md).
 pip install -r requirements.txt
 ```
 
+## Fair play
+
+The bot plays the way a person does: **during a night it only looks at the
+screen and moves the mouse.** It never reads or changes the game's save file,
+memory or any other game file, and it reaches nights only through the game's
+own menus (so 6th Night and Custom Night must be unlocked by actually winning
+the earlier nights). `tests/test_fair_play.py` checks the code for this.
+
+Two things were learned from the game beforehand, the way a player would
+study a strategy guide: the rules (timers, routes, AI levels - see
+[docs/GAME_LOGIC.md](docs/GAME_LOGIC.md)) and the reference pictures the
+vision compares the screen against (copied once from your installed game by
+the setup step below, never during play).
+
 ## Running
 
-```bash
-python -m fnafbot --night 1 2 3 4 5
-```
+One-time setup (copies the reference pictures out of your installed game):
 
 ```bash
-python -m fnafbot --custom 20 20 20 20
+python -m fnafbot --setup
 ```
 
-* The bot starts (or restarts) the game itself and picks the night from the
-  menu. To do that it edits the save file; your original save is backed up
-  once to `cache/save_backup.ini`.
+Then, for example:
+
+```bash
+python -m fnafbot --campaign
+```
+
+| Option | What it plays |
+|---|---|
+| `--new-game` | New Game: Night 1, then each next night until Night 5 is won |
+| `--continue` | Continue from the night the game has saved |
+| `--sixth` | 6th Night (once the game has unlocked it) |
+| `--custom 20 20 20 20` | Custom Night with these AI levels (Freddy, Bonnie, Chica, Foxy), once unlocked |
+| `--campaign` | New Game, nights 1-5, then 6th Night, then Custom Night 20/20/20/20 |
+| `--nights N` | Stop after N nights |
+
+* The bot starts the game if it is not running and follows the game's own
+  screens: after a won night the game goes on to the next night by itself.
 * A small status panel at the top of the screen shows what the bot is doing
   ("Looking for Bonnie", "Camera flip to hold Foxy", ...).
 * **Press F8 to stop the bot at any time.**
-* Every run writes a log to `logs/`. If a night is ever lost, a screenshot is
-  saved next to the log.
+* Every run writes a log to `logs/`, and a small picture of every doorway
+  decision to `logs/doorway/`. If a night is ever lost, the bot stops and
+  saves a screenshot next to the log.
 
 Do not use the mouse while the bot is playing - it needs the cursor.
 
@@ -106,7 +133,7 @@ python -m pytest tests
 ## Notes
 
 * The game's artwork is never stored in this repository. Reference pictures
-  are extracted from your own installed copy into `cache/` on first run.
+  are extracted from your own installed copy into `cache/` by `--setup`.
 * The bot launches `FiveNightsatFreddys.exe` directly instead of through
   Steam, because Steam refuses to launch while the account is playing
   something on another computer.

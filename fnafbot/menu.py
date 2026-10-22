@@ -1,25 +1,26 @@
 """Starting the game and getting from the title screen into a night.
 
-How nights are chosen (from the game's own title-screen logic, see
-docs/GAME_LOGIC.md):
+The bot only uses the game the way a player does. It never reads or edits
+the save file or any other game file; it looks at the screen and clicks:
 
-* "Continue" starts the night stored as ``level`` in the save file (1-5).
-* "6th Night" needs ``beatgame=1``; "Custom Night" also needs ``beat6=1``.
+* "New Game"     -> Night 1 (the game resets its own progress)
+* "Continue"     -> whatever night the game has saved (1-5)
+* "6th Night"    -> only shown once the game has been beaten
+* "Custom Night" -> only shown once night 6 has been beaten; AI levels are
+                    set with the arrow buttons on the Custom Night screen
 
-So to play any night the bot edits the save file (after making a backup),
-then clicks the right menu entry. The game reads the save file when the
-title screen appears, which is why the save is written *before* the game is
-(re)started.
+Which entries exist is read from the title screen itself (the game's own
+"6th Night" / "Custom Night" text sprites, see catalog.py).
+
+After a won night (1-4) the game goes straight on to the next night by
+itself; after night 5 it shows the ending and returns to the title screen.
 """
 
 from __future__ import annotations
 
-import configparser
 import logging
-import shutil
 import subprocess
 import time
-from pathlib import Path
 
 import cv2
 
@@ -30,7 +31,6 @@ from fnafbot.screen import GameWindow
 log = logging.getLogger(__name__)
 
 PROCESS_NAME = "FiveNightsatFreddys.exe"
-BACKUP_FILE = config.PROJECT_ROOT / "cache" / "save_backup.ini"
 
 # Custom Night screen: the left/right arrow buttons for each animatronic and
 # the Ready button (game coordinates, measured on the live screen).
@@ -48,47 +48,12 @@ CUSTOM_READY = (1141, 656)
 # (still inside the arrow button) keeps every click a single click.
 ARROW_CLICK_JITTER = 12
 
-# The easter-egg combination that skips the night (see GAME_LOGIC.md).
+# The easter-egg combination that skips the night (see docs/GAME_LOGIC.md).
 FORBIDDEN_CUSTOM_LEVELS = {"freddy": 1, "bonnie": 9, "chica": 8, "foxy": 7}
 
 
-# ---------------------------------------------------------------------------
-# Save file
-# ---------------------------------------------------------------------------
-
-
-def read_save() -> dict[str, str]:
-    """Return the save file's values, e.g. {'level': '3', 'lives': '5'}."""
-    parser = configparser.ConfigParser()
-    if config.SAVE_FILE.exists():
-        parser.read(config.SAVE_FILE)
-    return dict(parser["freddy"]) if parser.has_section("freddy") else {}
-
-
-def backup_save() -> None:
-    """Copy the save file to cache/save_backup.ini once (never overwritten),
-    so the player's real progress can always be restored."""
-    if config.SAVE_FILE.exists() and not BACKUP_FILE.exists():
-        BACKUP_FILE.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(config.SAVE_FILE, BACKUP_FILE)
-        log.info("Backed up the save file to %s", BACKUP_FILE)
-
-
-def restore_save() -> None:
-    """Put the player's original save file back."""
-    if BACKUP_FILE.exists():
-        shutil.copy2(BACKUP_FILE, config.SAVE_FILE)
-        log.info("Restored the original save file")
-
-
-def write_save(**values: int) -> None:
-    """Set keys in the save file (keeping the others), e.g. write_save(level=3)."""
-    backup_save()
-    current = read_save()
-    current.update({key: str(value) for key, value in values.items()})
-    config.SAVE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    lines = ["[freddy]"] + [f"{key}={value}" for key, value in current.items()]
-    config.SAVE_FILE.write_text("\n".join(lines) + "\n", encoding="ascii")
+class MenuError(RuntimeError):
+    """The expected screen did not appear, or a menu entry is not unlocked."""
 
 
 # ---------------------------------------------------------------------------
@@ -102,12 +67,6 @@ def is_running() -> bool:
     return PROCESS_NAME.lower() in output.lower()
 
 
-def close_game() -> None:
-    if is_running():
-        subprocess.run(["taskkill", "/IM", PROCESS_NAME, "/F"], capture_output=True)
-        time.sleep(1.5)
-
-
 def launch_game() -> None:
     """Start the game exe directly (not through Steam: launching via Steam can
     be blocked when the Steam account is in use on another computer)."""
@@ -115,68 +74,79 @@ def launch_game() -> None:
     log.info("Launched %s", config.GAME_EXE.name)
 
 
+def open_game() -> GameWindow:
+    """Find the running game (starting it if needed) and bring it to the front."""
+    if not is_running():
+        launch_game()
+    window = GameWindow()
+    window.find(timeout=30)
+    window.focus()
+    return window
+
+
+# ---------------------------------------------------------------------------
+# Reading the screen
+# ---------------------------------------------------------------------------
+
+
+def sprite_visible(window: GameWindow, handle: int, threshold: float = 0.9) -> bool:
+    """Is one of the game's own text sprites (catalog.py) on screen?"""
+    score = cv2.matchTemplate(window.grab(), assets.load(handle), cv2.TM_CCOEFF_NORMED).max()
+    return bool(score > threshold)
+
+
 def wait_for_sprite(window: GameWindow, handle: int, timeout: float = 30.0) -> bool:
-    """Wait until one of the game's own text sprites (catalog.py) is on screen."""
-    sprite = assets.load(handle)
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        score = cv2.matchTemplate(window.grab(), sprite, cv2.TM_CCOEFF_NORMED).max()
-        if score > 0.9:
+        if sprite_visible(window, handle):
             return True
         time.sleep(0.2)
     return False
 
 
-def restart_game() -> GameWindow:
-    """(Re)start the game so it re-reads the save file; returns its window
-    once the title screen is showing (after the start-up warning screen)."""
-    close_game()
-    launch_game()
-    window = GameWindow()
-    window.find(timeout=30)
-    window.focus()
-    if not wait_for_sprite(window, catalog.TITLE_CONTINUE, timeout=30):
-        raise RuntimeError("The title screen did not appear")
+def on_title_screen(window: GameWindow) -> bool:
+    return sprite_visible(window, catalog.TITLE_CONTINUE)
+
+
+def unlocked(window: GameWindow) -> dict[str, bool]:
+    """Which extra menu entries the title screen shows right now."""
+    return {
+        "sixth": sprite_visible(window, catalog.TITLE_SIXTH_NIGHT),
+        "custom": sprite_visible(window, catalog.TITLE_CUSTOM_NIGHT),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Menu actions (call these while the title screen is showing)
+# ---------------------------------------------------------------------------
+
+
+def choose(window: GameWindow, entry: str, custom_levels: dict[str, int] | None = None) -> None:
+    """Click a title-screen entry: 'new', 'continue', 'sixth' or 'custom'."""
+    if not wait_for_sprite(window, catalog.TITLE_CONTINUE, timeout=40):
+        raise MenuError("The title screen is not showing")
     time.sleep(0.5)  # let the menu finish fading in
-    return window
-
-
-# ---------------------------------------------------------------------------
-# Starting nights
-# ---------------------------------------------------------------------------
-
-
-def start_night(night: int, custom_levels: dict[str, int] | None = None) -> GameWindow:
-    """Prepare the save file, restart the game and click into ``night``.
-
-    night 1-5 -> "Continue" with level=night
-    night 6   -> "6th Night"
-    night 7   -> "Custom Night" with ``custom_levels`` (e.g. all 20)
-    """
-    if night == 7:
+    available = unlocked(window)
+    if entry in ("sixth", "custom") and not available[entry]:
+        raise MenuError(f"'{entry}' is not unlocked in the game yet - win the earlier nights first")
+    mouse = Mouse(window)
+    target = {
+        "new": layout.MENU_NEW_GAME,
+        "continue": layout.MENU_CONTINUE,
+        "sixth": layout.MENU_SIXTH_NIGHT,
+        "custom": layout.MENU_CUSTOM_NIGHT,
+    }[entry]
+    log.info("Menu: %s", entry)
+    mouse.click(*target)
+    if entry == "custom":
         levels = custom_levels or {"freddy": 20, "bonnie": 20, "chica": 20, "foxy": 20}
         if levels == FORBIDDEN_CUSTOM_LEVELS:
-            raise ValueError("1/9/8/7 is the easter-egg code and does not start a night")
-        write_save(beatgame=1, beat6=1)
-    elif night == 6:
-        write_save(beatgame=1)
-    else:
-        write_save(level=night)
-
-    window = restart_game()
-    mouse = Mouse(window)
-    if night <= 5:
-        mouse.click(*layout.MENU_CONTINUE)
-    elif night == 6:
-        mouse.click(*layout.MENU_SIXTH_NIGHT)
-    else:
-        mouse.click(*layout.MENU_CUSTOM_NIGHT)
+            raise MenuError("1/9/8/7 is the easter-egg code and does not start a night")
         if not wait_for_sprite(window, catalog.CUSTOM_READY_BUTTON, timeout=10):
-            raise RuntimeError("The Custom Night screen did not appear")
+            raise MenuError("The Custom Night screen did not appear")
         set_custom_levels(mouse, levels)
         time.sleep(0.3)
         mouse.click(*CUSTOM_READY)
-    return window
 
 
 def set_custom_levels(mouse: Mouse, levels: dict[str, int]) -> None:

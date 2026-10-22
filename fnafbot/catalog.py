@@ -162,6 +162,7 @@ CLOCK_FONT = {0: 250, 1: 253, 2: 254, 3: 255, 4: 256, 5: 257, 6: 258, 7: 259, 8:
 USAGE_LABEL = 190
 
 # Menu text sprites, used to know which screen is showing (score 0.98 - 1.0).
+TITLE_NEW_GAME = 449      # "New Game" on the title screen
 TITLE_CONTINUE = 450      # "Continue" on the title screen
 TITLE_SIXTH_NIGHT = 444   # "6th Night" (only once the game is beaten)
 TITLE_CUSTOM_NIGHT = 527  # "Custom Night" (only once night 6 is beaten)

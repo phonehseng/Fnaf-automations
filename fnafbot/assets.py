@@ -132,17 +132,20 @@ def extract_all(exe_path: Path = config.GAME_EXE, out_dir: Path = config.ASSET_C
             cv2.imwrite(str(out_dir / f"{handle:04d}.png"), image)
             written += 1
     log.info("Extracted %d images from %s", written, exe_path)
+    # Written last, so an interrupted extraction is not mistaken for a finished one.
+    (out_dir / _DONE_MARKER).write_text(f"extractor version {_EXTRACTOR_VERSION}\n")
     return written
 
 
-def ensure_extracted() -> None:
-    """Extract the images once; later runs reuse the cache."""
-    # The marker file is written last, so a half-finished extraction is redone.
-    marker = config.ASSET_CACHE / _DONE_MARKER
-    if not marker.exists():
-        log.info("First run: extracting reference images from the game...")
-        extract_all()
-        marker.write_text(f"extractor version {_EXTRACTOR_VERSION}\n")
+def require_extracted() -> None:
+    """Make sure the one-time setup has been done.
+
+    The bot never opens game files while playing. Reference pictures are
+    copied out of the installed game ONCE, by ``python -m fnafbot --setup``,
+    before any night is played."""
+    if not (config.ASSET_CACHE / _DONE_MARKER).exists():
+        raise RuntimeError("Reference pictures are missing. Run the one-time setup first:\n"
+                           "    python -m fnafbot --setup")
 
 
 def load(handle: int, flags: int = cv2.IMREAD_COLOR) -> np.ndarray:

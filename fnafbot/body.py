@@ -21,7 +21,7 @@ import time
 import cv2
 import numpy as np
 
-from fnafbot import layout
+from fnafbot import config, layout
 from fnafbot.controller import Controller, LEFT, RIGHT
 from fnafbot.vision import Vision
 
@@ -34,8 +34,14 @@ HUD_GONE_SECONDS = 1.5
 # Typical delay between a game frame and our screenshot of it.
 CAPTURE_LATENCY = 0.015
 
-# Doorway brightness (0-255 gray) above which the hall light counts as on.
+# Doorway brightness (0-255 gray) above which the hall light counts as on
+# (only used to tell whether a light is still on before switching it off).
 LIT_THRESHOLD = 11.0
+
+# A doorway reading is only trusted if the best-matching game picture fits
+# better than the runner-up by at least this much (0-255 colour error).
+# Measured on live frames: correct answers had margins of 2.8 - 29.
+DOORWAY_MIN_MARGIN = 1.5
 DOORWAY_REGION = {LEFT: (slice(150, 600), slice(0, 300)), RIGHT: (slice(150, 600), slice(980, 1280))}
 
 
@@ -84,6 +90,14 @@ class RealBody:
                 log.info("Night started (clock running)")
                 return
         raise RuntimeError("The night did not start (no HUD seen)")
+
+    def start_clock_at(self, first_hud_frame: float) -> None:
+        """Start the clock from an already-detected first HUD frame
+        (``first_hud_frame`` is a time.perf_counter() value)."""
+        self.t0 = first_hud_frame
+        self.t0_upper_bound = first_hud_frame + CAPTURE_LATENCY
+        self.last_hud_seen = time.perf_counter()
+        log.info("Night started (clock running)")
 
     def now(self) -> float:
         return time.perf_counter() - self.t0
@@ -179,10 +193,15 @@ class RealBody:
         return float(cv2.cvtColor(frame[rows, cols], cv2.COLOR_BGR2GRAY).mean()) > LIT_THRESHOLD
 
     def look_doorway(self, side: str) -> tuple[bool, bool]:
-        """Look at the lit doorway. Returns (someone there, light was on).
-        Frames where the light flickered dark are skipped."""
-        look = self.vision.bonnie_at_left_door if side == LEFT else self.vision.chica_at_right_window
-        deadline = time.perf_counter() + 0.15
+        """Look at the doorway with its light on. Returns (someone there, light was on).
+
+        Each frame is classified as dark / empty / occupied by comparing it
+        with the game's own pictures (vision.doorway_state). Dark frames
+        (light not on yet, or one of its flickers) are skipped - "dark" is
+        never taken to mean "empty". Every decision is saved as a small
+        picture in logs/doorway/ so it can be checked afterwards.
+        """
+        deadline = time.perf_counter() + 0.2
         while time.perf_counter() < deadline:
             frame = self.ctl.window.grab()
             if self.vision.current_camera(frame) is not None:
@@ -190,16 +209,28 @@ class RealBody:
                 # doorway from a camera picture.
                 log.warning("look_doorway: the camera is showing, not the office")
                 return False, False
-            if self._lit(frame, side):
-                present, margin = look(frame)
-                log.info("doorway %s: %s (margin %.1f)", side, "OCCUPIED" if present else "empty", margin)
-                if present or margin > 2.0:
-                    return present, True
+            state, margin = self.vision.doorway_state(frame, side)
+            if state == "dark" or margin < DOORWAY_MIN_MARGIN:
+                continue
+            log.info("doorway %s: %s (margin %.1f)", side, state.upper(), margin)
+            self._save_evidence(frame, f"{side}_{state}_{margin:.1f}")
+            return state == "occupied", True
+        log.info("doorway %s: no lit frame (light did not come on?)", side)
         return False, False
 
+    def _save_evidence(self, frame: np.ndarray, label: str) -> None:
+        """Keep a small copy of the frame a decision was based on."""
+        try:
+            config.EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
+            small = cv2.resize(frame, (640, 360), interpolation=cv2.INTER_AREA)
+            cv2.imwrite(str(config.EVIDENCE_DIR / f"{self.now():07.2f}s_{label}.jpg"), small,
+                        [cv2.IMWRITE_JPEG_QUALITY, 70])
+        except OSError:
+            log.debug("could not save evidence frame", exc_info=True)
+
     def light_is_on(self, side: str) -> bool:
-        """Lights flicker dark for single frames, so look at three frames."""
-        return any(self._lit(self.ctl.window.grab(), side) for _ in range(3))
+        """Read the LIGHT button's lamp (it does not flicker, unlike the hall)."""
+        return self.vision.light_lamp_on(self.ctl.window.grab(), side)
 
     # ------------------------------------------------------------------
     # Camera
@@ -207,7 +238,10 @@ class RealBody:
 
     def camera_up(self) -> bool:
         self._check_stop()
-        return self.ctl.camera_up()
+        ok = self.ctl.camera_up()
+        # A freshly raised camera also starts with a burst of static.
+        self._switched_at = time.perf_counter()
+        return ok
 
     def camera_down(self) -> bool:
         return self.ctl.camera_down()
@@ -217,6 +251,7 @@ class RealBody:
         if self.ctl.selected_camera != camera:
             self.ctl.mouse.click(*layout.CAMERA_BUTTONS[camera])
             self.ctl.selected_camera = camera
+            self._switched_at = time.perf_counter()
 
     def read_camera(self, camera: str) -> dict:
         """Read a camera picture: {'occupants', 'foxy_stage', 'visible'}."""
@@ -224,7 +259,11 @@ class RealBody:
         while time.perf_counter() < deadline:
             if self.vision.current_camera(self.ctl.window.grab()) == camera:
                 break
-        time.sleep(layout.CAMERA_SWITCH_SECONDS)
+        # Right after switching cameras the picture is covered by a burst of
+        # static; wait for it to fade (only needed after a switch).
+        settle_until = getattr(self, "_switched_at", 0.0) + layout.CAMERA_SWITCH_SECONDS
+        if time.perf_counter() < settle_until:
+            time.sleep(settle_until - time.perf_counter())
         frames = [self.ctl.window.grab() for _ in range(2)]
         reading = self.vision.read_camera(frames, camera)
         log.info("camera %s: %s foxy=%s margin=%.2f", camera, "".join(sorted(reading.occupants)) or "-",

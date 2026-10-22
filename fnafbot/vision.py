@@ -53,6 +53,16 @@ TYPICAL_BRIGHTNESS = 10.0
 # Pixels compared per camera read (see _rank_candidates).
 MAX_COMPARE_PIXELS = 4000
 
+# Where Bonnie (left doorway) and Chica (right window) appear when the hall
+# light is on, in OFFICE coordinates (the 1600-px-wide office picture). Found
+# by diffing the game's "light on, empty" and "light on, occupied" pictures:
+# Chica's window is x 1141-1216, y 211-445; Bonnie fills the doorway left of
+# the door frame. Each box keeps a little margin around that area.
+DOORWAY_BOXES = {
+    "left": layout.Box(20, 60, 250, 470),
+    "right": layout.Box(1130, 195, 1230, 455),
+}
+
 # Region (quarter-size rows y0:y1, cols x0:x1) used to find a camera's pan.
 # It is the left 800 x 530 px of the screen, below the recording dot and
 # above the power text: the map and HUD never cover it.
@@ -192,7 +202,9 @@ class Vision:
     """Loads all reference pictures once, then answers questions about frames."""
 
     def __init__(self) -> None:
-        assets.ensure_extracted()
+        # Reference pictures come from the one-time setup step
+        # (python -m fnafbot --setup). Nothing is read from the game here.
+        assets.require_extracted()
 
         # HUD fonts and labels (full colour, full size: they are pixel perfect).
         self.power_font = {d: assets.load(h) for d, h in catalog.POWER_FONT.items()}
@@ -226,6 +238,21 @@ class Vision:
         # Where (in office coordinates) Bonnie / Chica appear when lit.
         self.left_door_mask = self._difference_mask(self.left_lit_empty, self.left_lit_bonnie)
         self.right_door_mask = self._difference_mask(self.right_lit_empty, self.right_lit_chica)
+
+        # Full-size colour references for doorway_state().
+        office = assets.load(catalog.OFFICE_NORMAL).astype(np.float32)
+        self.doorway_refs = {
+            "left": {
+                "dark": office,
+                "empty": assets.load(catalog.OFFICE_LEFT_LIGHT_EMPTY).astype(np.float32),
+                "occupied": assets.load(catalog.OFFICE_LEFT_LIGHT_BONNIE).astype(np.float32),
+            },
+            "right": {
+                "dark": office,
+                "empty": assets.load(catalog.OFFICE_RIGHT_LIGHT_EMPTY).astype(np.float32),
+                "occupied": assets.load(catalog.OFFICE_RIGHT_LIGHT_CHICA).astype(np.float32),
+            },
+        }
 
     # -- setup helpers --------------------------------------------------------
 
@@ -435,6 +462,29 @@ class Vision:
         scores = cv2.matchTemplate(ref, live, cv2.TM_CCOEFF_NORMED)
         return int(np.argmax(scores)) * SCALE
 
+    def doorway_state(self, frame: np.ndarray, side: str) -> tuple[str, float]:
+        """Classify the doorway on ``side``: 'dark', 'empty' or 'occupied'.
+
+        Compares the doorway / window area with three pictures from the game:
+        the office with that hall light OFF, light ON and nobody there, and
+        light ON with Bonnie (left) / Chica (right). 'dark' means the light is
+        not (yet) on, or flickered off in this frame - that must never be
+        taken as "nobody there". Returns (state, margin) where margin is how
+        much better the winning picture fits than the runner-up (0-255 scale).
+        """
+        box = DOORWAY_BOXES[side]
+        pan = self.office_pan(frame)
+        x0, x1 = box.x0 - pan, box.x1 - pan          # office -> screen columns
+        if x0 < 0 or x1 > 1280:
+            return "dark", 0.0                       # doorway not on screen
+        live = frame[box.y0:box.y1, x0:x1].astype(np.float32)
+        errors = {
+            state: float(np.abs(live - ref[box.y0:box.y1, box.x0:box.x1]).mean())
+            for state, ref in self.doorway_refs[side].items()
+        }
+        ranked = sorted(errors.items(), key=lambda kv: kv[1])
+        return ranked[0][0], ranked[1][1] - ranked[0][1]
+
     def _doorway(self, frame: np.ndarray, empty: np.ndarray, occupied: np.ndarray,
                  mask: np.ndarray) -> tuple[bool, float]:
         """Compare the doorway area with the lit-empty and lit-occupied pictures.
@@ -460,6 +510,16 @@ class Vision:
     def chica_at_right_window(self, frame: np.ndarray) -> tuple[bool, float]:
         """With the RIGHT light on and the view panned right: is Chica there?"""
         return self._doorway(frame, self.right_lit_empty, self.right_lit_chica, self.right_door_mask)
+
+    @staticmethod
+    def light_lamp_on(frame: np.ndarray, side: str) -> bool:
+        """Is the hall light on? Read from the LIGHT button's own lamp on the
+        wall panel (only valid while the view faces that side). Measured: off
+        is gray (~84, 84, 84), on is bluish white (~196, 164, 154), and the
+        lamp does not flicker when the hall light does."""
+        box = layout.LEFT_LIGHT_LAMP if side == "left" else layout.RIGHT_LIGHT_LAMP
+        blue = float(box.crop(frame)[:, :, 0].mean())
+        return blue > 140
 
     @staticmethod
     def door_lamp(frame: np.ndarray, side: str) -> str | None:
