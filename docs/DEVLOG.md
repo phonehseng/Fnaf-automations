@@ -361,6 +361,34 @@ office frames.
 fitted to the last two minutes of power changes instead of the whole
 night, so it follows the current pace.
 
+**Second look at the same numbers, in REAL seconds.** Converting the
+bot's scaled times back to real seconds since the night start:
+
+```
+leaves 1B   k=12   real  60.24 s   k x 4.97 = 59.64   +0.60
+leaves 5    k=16   real  80.02 s             79.52   +0.50
+leaves 1B   k=18   real  89.84 s             89.46   +0.38
+leaves 5    k=33   real 164.63 s            164.01   +0.62
+leaves 1B   k=40   real 199.27 s            198.80   +0.47
+(next run)  k=22   real 109.78 s            109.34   +0.44
+```
+
+Flat. Bonnie's timer runs at **exactly 4.97 real seconds**, offset by
+about half a second, while the power readout (and so 6 AM) drifts at
+1.0065 real seconds per tick. The bot's single scaled clock was right
+for power and wrong for Bonnie by `0.5 - 0.032 k` seconds: nothing at
+75 s, -0.8 s at 200 s, -2 s at 400 s - which is where every Night 4
+loss sat, and exactly where the last one happened (tick 88: the model
+said 440.2 s, the real-time rule says 437.9 s, the "lost" door click was
+at 438.0 s).
+
+**Fix.** Movement ticks are now computed in real seconds
+(`rules.ANIM_TICK_PHASE` + k x period) and converted into the brain's
+power-second clock with the measured scale (`Brain._next_tick`,
+`_tick_times`). The simulator keeps one clock for everything (scale 1,
+phase 0). Why one Clickteam timer drifts and another does not is still
+open; the measurement is what the bot follows.
+
 **Also noted (from the user):** the hall light works with the door shut,
 and on the right side Chica's window is beside the door, so a peek on
 the right may not need the door open at all. The simulator assumes a

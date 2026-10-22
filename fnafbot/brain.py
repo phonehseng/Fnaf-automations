@@ -51,7 +51,7 @@ CLOCK_MARGIN = 0.1
 # can be off by CLOCK_MARGIN and the game fires the tick on a whole frame.
 # A door reopened on the very frame of their tick lets them in (the move
 # simply waits for the door animation to finish), so this must be generous.
-TICK_SETTLE = 0.2
+TICK_SETTLE = 0.3
 
 # Clicks are ignored for 10 frames after a door/light click.
 BUTTON_COOLDOWN = 0.19
@@ -261,7 +261,7 @@ class Brain:
         """
         def hits_move_tick(start: float) -> bool:
             for interval in (rules.BONNIE_TICK, rules.CHICA_TICK):
-                tick = rules.next_tick(interval, start - MOVE_TICK_GUARD)
+                tick = self._next_tick(interval, start - MOVE_TICK_GUARD)
                 if tick <= start + LIGHT_CHECK_SECONDS + MOVE_TICK_GUARD:
                     return True
             return False
@@ -277,17 +277,39 @@ class Brain:
             t += 0.02
         return best_without_move_tick if best_without_move_tick is not None else earliest
 
-    @staticmethod
-    def _tick_after(watch: DoorWatch, now: float) -> float:
+    # -- movement ticks in the brain's clock --------------------------------
+    #
+    # The brain's clock (body.now()) counts the game's power seconds, which
+    # are a little longer than real seconds (body.scale). The animatronics'
+    # timers were measured to run in REAL seconds with a small phase offset
+    # (rules.ANIM_TICK_PHASE), so every "when is their next tick" question
+    # goes through these two helpers, which convert. (In the simulator both
+    # clocks agree: scale 1, phase 0.) Getting this wrong cost several
+    # nights - docs/DEVLOG.md.
+
+    def _next_tick(self, nominal: float, after: float) -> float:
+        """The first tick of a timer with a ``nominal`` real-second period
+        strictly after night time ``after``."""
+        period = nominal / self.body.scale
+        phase = self.body.tick_phase / self.body.scale
+        return rules.next_tick(period, after - phase) + phase
+
+    def _tick_times(self, nominal: float, start: float, end: float) -> list[float]:
+        """All ticks of that timer inside [start, end)."""
+        period = nominal / self.body.scale
+        phase = self.body.tick_phase / self.body.scale
+        return [t + phase for t in rules.tick_times(period, start - phase, end - phase)]
+
+    def _tick_after(self, watch: DoorWatch, now: float) -> float:
         """Their next tick as far as the bot can be sure: a tick less than
         TICK_SETTLE ago may not have happened yet on the game's clock, so it
         still counts as upcoming. (Opening a door on the frame of their
         tick lets them in - found with the simulator's wandering clock.)"""
-        return rules.next_tick(watch.tick, now - TICK_SETTLE)
+        return self._next_tick(watch.tick, now - TICK_SETTLE)
 
     def _moves_since(self, watch: DoorWatch, after: float, until: float) -> int:
         """How many of their ticks (with AI > 0) fall in (after, until]."""
-        ticks = rules.tick_times(watch.tick, after + 1e-6, until + 1e-6)
+        ticks = self._tick_times(watch.tick, after + 1e-6, until + 1e-6)
         return sum(1 for tick in ticks if self.ai(tick)[watch.who] > 0)
 
     # ------------------------------------------------------------------
@@ -315,7 +337,7 @@ class Brain:
         # report "empty" about a doorway they are about to step into.
         now -= TICK_SETTLE
         for watch in (self.left, self.right):
-            for tick in rules.tick_times(watch.tick, watch.last_tick_seen + 1e-6, now + 1e-6):
+            for tick in self._tick_times(watch.tick, watch.last_tick_seen + 1e-6, now + 1e-6):
                 watch.last_tick_seen = tick
                 if self.ai(tick)[watch.who] == 0:
                     continue
@@ -323,7 +345,7 @@ class Brain:
                 if not watch.at_door:
                     watch.min_moves = max(0, watch.min_moves - 1)
         # Foxy: every tick of his that no camera flip covered may have moved him.
-        for tick in rules.tick_times(rules.FOXY_TICK, self.foxy_last_tick_seen + 1e-6, now + 1e-6):
+        for tick in self._tick_times(rules.FOXY_TICK, self.foxy_last_tick_seen + 1e-6, now + 1e-6):
             self.foxy_last_tick_seen = tick
             if self.ai(tick)["foxy"] > 0 and not self._foxy_tick_covered(tick) and self.foxy_max_stage < 3:
                 self.foxy_max_stage += 1
@@ -701,7 +723,7 @@ class Brain:
             return
         self.body.face(watch.side)
         self.body.wait_until(watch.close_at)
-        tick = rules.next_tick(watch.tick, watch.close_at - 0.01)
+        tick = self._next_tick(watch.tick, watch.close_at - 0.01)
         if self.body.now() > tick - 0.1:
             log.warning("Late door click for %s (%.3f s before the tick)", watch.who, tick - self.body.now())
         self._close_door(watch, reason="just in time", after=self.body.now() - BUTTON_COOLDOWN)
@@ -783,7 +805,7 @@ class Brain:
 
     def _next_freeze_start(self, now: float) -> float | None:
         """When to start raising the camera for the next Foxy tick (or None)."""
-        tick = rules.next_tick(rules.FOXY_TICK, max(now, self.foxy_frozen_tick + 0.01))
+        tick = self._next_tick(rules.FOXY_TICK, max(now, self.foxy_frozen_tick + 0.01))
         if self.ai(tick)["foxy"] == 0 or self.foxy_emergency:
             return None
         # Camera picture showing during [view_start, view_end], ending close
@@ -862,7 +884,7 @@ class Brain:
     def _freeze_foxy(self) -> None:
         """Short camera flip just before Foxy's tick, so his lock is running."""
         now = self.body.now()
-        tick = rules.next_tick(rules.FOXY_TICK, max(now, self.foxy_frozen_tick + 0.01))
+        tick = self._next_tick(rules.FOXY_TICK, max(now, self.foxy_frozen_tick + 0.01))
         self.foxy_frozen_tick = tick
         cove_check = self._cove_check_due()
         self.say("Camera flip: checking Foxy" if cove_check else "Camera flip to hold Foxy (resting on 4B)")

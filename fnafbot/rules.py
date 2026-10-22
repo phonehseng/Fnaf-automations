@@ -24,6 +24,15 @@ FRAME = 1.0 / FPS
 # docs/DEVLOG.md, "the game's clock runs slow").
 TICK_SECONDS = 1.0065
 
+# The animatronics' movement timers do NOT stretch like the power timer:
+# measured live (tools/measure_ticks.py), Bonnie's room changes land at
+# ANIM_TICK_PHASE + k * 4.97 REAL seconds after the night start, with no
+# drift, while the power readout drops every 1.0065 real seconds. So the
+# brain converts movement ticks with the measured scale (see
+# Brain._next_tick). The phase is measured at ~0.5 s; a little less is
+# assumed so that errors fall on the safe (early) side.
+ANIM_TICK_PHASE = 0.4
+
 FIRST_HOUR_SECONDS = 90        # 12 AM lasts 90 s ...
 HOUR_SECONDS = 89              # ... every later hour 89 s
 NIGHT_SECONDS = FIRST_HOUR_SECONDS + 5 * HOUR_SECONDS   # 6 AM at 535 s

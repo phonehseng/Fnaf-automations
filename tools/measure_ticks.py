@@ -85,15 +85,25 @@ def main() -> None:
         body.wait_until(body.now() + 0.02)   # keeps the clock fitting from the power readout
 
     ctl.camera_down()
-    print(f"\nclock: game second = {body.scale:.4f} real s; {len(events)} room changes")
-    print(f"{'time':>8}  {'event':18} " + "  ".join(f"{name:>14}" for name in MODELS))
+    scale = body.scale
+    print(f"\nclock: game second (power timer) = {scale:.4f} real s; {len(events)} room changes")
+    # Candidate rules for Bonnie's timer, all expressed in REAL seconds since
+    # the night's first frame (the bot's clock times scale):
+    models = {
+        "game 4.97": 4.97 * scale,                       # same stretch as the power timer
+        "real 4.97": 4.97,                               # exact real time
+        "frames": round(4.97 / (scale / 60)) * scale / 60,   # whole frames, rounded
+    }
+    print(f"{'game s':>8} {'real s':>8}  {'event':14} " + "  ".join(f"{name:>16}" for name in models))
     for t, what in events:
+        real = t * scale
         cells = []
-        for name, period in MODELS.items():
-            k = round(t / period)
-            cells.append(f"k={k:3d} {t - k * period:+6.2f}s")
-        print(f"{t:8.2f}  {what:18} " + "  ".join(f"{c:>14}" for c in cells))
-    print("\nThe model whose residuals stay near zero (and do not grow with k) is the real one.")
+        for name, period in models.items():
+            k = round(real / period)
+            cells.append(f"k={k:3d} {real - k * period:+6.2f}s")
+        print(f"{t:8.2f} {real:8.2f}  {what:14} " + "  ".join(f"{c:>16}" for c in cells))
+    print("\n'leaves' lines are the precise ones (an 'appears' is found by scanning, later).")
+    print("The rule whose residuals stay constant (any offset, no growth with k) is the real one.")
 
 
 if __name__ == "__main__":

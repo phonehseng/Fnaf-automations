@@ -412,6 +412,9 @@ class SimBody:
         rng = random.Random(f"clock-{getattr(sim, 'seed', 0)}")
         self._phase = (rng.uniform(0, 2 * math.pi), rng.uniform(0, 2 * math.pi))
         self._error = clock_error
+        # In the simulator every timer runs on the same frame clock.
+        self.scale = 1.0
+        self.tick_phase = 0.0
 
     # -- time
     def _clock_error(self) -> float:
