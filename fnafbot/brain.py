@@ -51,7 +51,7 @@ CLOCK_MARGIN = 0.1
 # can be off by CLOCK_MARGIN and the game fires the tick on a whole frame.
 # A door reopened on the very frame of their tick lets them in (the move
 # simply waits for the door animation to finish), so this must be generous.
-TICK_SETTLE = 0.65
+TICK_SETTLE = 0.4
 
 # Clicks are ignored for 10 frames after a door/light click.
 BUTTON_COOLDOWN = 0.26     # same as controller.BUTTON_COOLDOWN (see the note there)
@@ -121,21 +121,21 @@ JIT_DOORS = True
 # click delay (one frame), and - should the game miss the click - reading
 # the button's lamp (0.05 s) plus one click cooldown (0.19 s) for a second
 # click that still lands before the tick (see _confirm_door_click).
-JIT_MIN_LEAD = 0.75
+JIT_MIN_LEAD = 0.5
 # Only plan a later close if at least this much time is left to choose from.
 JIT_MIN_SLACK = 0.6
 # Head for a planned click this long before it is needed (on top of the pan
 # and the click cooldown): slack for a slow screen read or a monitor that
 # takes a moment longer to come down. A click 0.4 s late once let Bonnie
 # in (docs/DEVLOG.md); the click itself still waits for the planned moment.
-JIT_HEADROOM = 0.2
+JIT_HEADROOM = 0.1
 # A blind reopen must leave the door open at least this long (after it has
 # opened) before the just-in-time click shuts it again, or it is not worth it.
 MIN_OPEN_SPAN = 1.2
 # A quick reopen may start this much past the planned start of a Foxy flip
 # (flips are planned 0.4 s before the latest safe moment, and _hold_until
 # keeps the picture up until the tick is covered anyway).
-REOPEN_FLIP_SLACK = 0.5
+REOPEN_FLIP_SLACK = 0.6
 
 
 class Body(Protocol):
@@ -536,7 +536,10 @@ class Brain:
         # and the later that planning starts the fewer slots are left (the
         # right door once stayed shut for 50 s because the left one was
         # always served first).
-        for watch in sorted((self.left, self.right), key=lambda w: self._tick_after(w, now)):
+        # The door that has been shut longest goes first (a door shut early
+        # for "two doors due together" otherwise waited behind the other
+        # door's reopen and the flip every cycle).
+        for watch in sorted((self.left, self.right), key=lambda w: w.closed_at):
             if self._peek_needed(watch, now):
                 if nothing_late(self._peek_estimate(watch)) and self._peek_fits(watch, now):
                     return lambda w=watch: self._peek(w)
