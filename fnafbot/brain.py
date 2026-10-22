@@ -429,6 +429,13 @@ class Brain:
         """
         # 1) Just-in-time door clicks.
         hard = sorted((self._jit_due(w), w) for w in (self.left, self.right) if w.close_at is not None)
+        if len(hard) == 2:
+            # Both doors are due. If the second click could not follow the
+            # first (cooldown + pan over) in time, shut that door right now.
+            (first_due, first), (_, second) = hard
+            if (second.close_at < first.close_at + BUTTON_COOLDOWN + PAN_SECONDS + 0.3
+                    and now >= first_due - 1.0):
+                return lambda w=second: self._close_door(w, reason="two doors due together", after=now)
         for due, watch in hard:
             if now >= due:
                 return lambda w=watch: self._jit_close(w)
@@ -642,7 +649,12 @@ class Brain:
             busy.append((freeze[0] - 0.05, freeze[1] + PAN_SECONDS + 0.05))
         for other in (self.left, self.right):
             if other is not watch and other.close_at is not None:
-                busy.append((other.close_at - PAN_SECONDS - 0.1, other.close_at + PAN_SECONDS + 0.1))
+                # The other click may land a little late, needs its cooldown,
+                # and the pan over here takes time: keep well clear of it.
+                # (Two clicks planned 0.9 s apart once made the second one
+                # late, and Chica walked in - docs/DEVLOG.md.)
+                busy.append((other.close_at - PAN_SECONDS - BUTTON_COOLDOWN - 0.2,
+                             other.close_at + BUTTON_COOLDOWN + PAN_SECONDS + 0.4))
 
         best, best_cost = None, None
         c = latest

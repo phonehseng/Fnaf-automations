@@ -279,3 +279,21 @@ perfect clock fails in the simulator first.
 Simulated with the wandering clock: nights 1, 4, 5: 60/60 each; 4/20:
 40/40 but only ~7 % power left on average (it was 17 % with a perfect
 clock). The margins cost power; tuning continues on the live game.
+
+---
+
+## 2026-10-22 - Live Night 4, third try: both doors due together (lost at 443 s)
+
+Bonnie and Chica were both at their doors from 436 s on, each on a
+"blind reopen" cycle (door open between ticks, shut just in time). Their
+ticks fell 0.9 s apart again: Bonnie's click was planned for 441.9 s,
+Chica's for 442.8 s. After Bonnie's click the bot still had to wait out
+the click cooldown and pan to the right; Chica's click landed at 443.2 s,
+her tick was 443.22 s. In.
+
+`_plan_close` did keep clear of the other door's planned click, but only
+by the pan time; it now keeps clear by pan + cooldown + margins on both
+sides, and `_choose_job` shuts the second door early whenever two clicks
+are due too close together ("two doors due together"). The blind reopens
+double the number of just-in-time clicks on a busy night, which is what
+made this collision likely.
