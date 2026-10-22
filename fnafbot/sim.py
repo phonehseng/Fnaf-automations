@@ -462,10 +462,10 @@ class SimBody:
         self.advance(DOORWAY_READ_SECONDS)
         if not self.sim.light[side]:
             return False, False
-        # With the door fully closed the doorway is hidden (verified live for
-        # the left side; assumed for the right side so the brain never relies
-        # on seeing through a closed door).
-        if self.sim.door[side] == CLOSED:
+        # With the door fully closed the LEFT doorway is hidden; Chica's
+        # window on the right is beside the door and stays visible (both
+        # verified live, tools/check_shut_window.py).
+        if self.sim.door[side] == CLOSED and side == LEFT:
             return False, True
         who = self.sim.bonnie if side == LEFT else self.sim.chica
         return who == "DOOR", True
