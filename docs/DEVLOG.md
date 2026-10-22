@@ -634,3 +634,18 @@ Changes:
 
 Simulated 4/20 after all five: 60/60, 16.0 % left on average (worst 9.8 %),
 0.12 knocks per night.
+
+### Live 4/20 #3 (15:04): lost to Freddy at ~100 s - a static frame read as "4B empty"
+
+Before looking at Pirate Cove the bot reads 4B: Freddy can only get in
+while a camera other than 4B shows, and only from 4B. The 4B frame it
+used was a camera-switch static burst - white bands over half the picture
+- and the classifier called it "empty, margin 11.7" (a confident answer).
+The bot switched to the cove with the right door open, and the next thing
+it saw was a blank cove and a monitor that would not come up.
+
+Checking the saved evidence: 24 of 1217 camera frames are such bursts, and
+the classifier gave confident answers on them (one "Freddy, margin 34.6"
+on a frame with no Freddy). Fix: frames with more than 15 % near-white
+pixels in the picture area are thrown away before classification, and 4B
+counts as empty only if two clean frames agree.

@@ -67,7 +67,7 @@ LIT_THRESHOLD = 11.0
 # and how clear a reading must be to be trusted. Pirate Cove decides whether
 # Foxy has left, so it gets more frames and a higher bar (correct synthetic
 # readings had margins >= 2.06).
-CAMERA_FRAMES = {"1C": 3}
+CAMERA_FRAMES = {"1C": 3, "4B": 2}
 CAMERA_MIN_MARGIN = {"1C": 2.0, "4B": 0.5}
 # Seconds to wait after switching to a camera before reading it. The static
 # burst after a switch can outlast 0.12 s; Pirate Cove is not urgent, so it
@@ -79,6 +79,15 @@ CAMERA_SETTLE = {"1C": 0.3}
 # Measured on live frames: correct answers had margins of 2.8 - 29.
 DOORWAY_MIN_MARGIN = 1.5
 DOORWAY_REGION = {LEFT: (slice(150, 600), slice(0, 300)), RIGHT: (slice(150, 600), slice(980, 1280))}
+
+
+def washed_out(frame: np.ndarray) -> bool:
+    """A camera frame covered by a burst of static (bright bands)? Camera
+    pictures are dark; more than 15 % near-white pixels in the picture area
+    (left of the map, below the clock) means static, not a room."""
+    area = frame[60:600, 0:800]
+    gray = cv2.cvtColor(area, cv2.COLOR_BGR2GRAY)
+    return float((gray > 200).mean()) > 0.15
 
 
 class StopRequested(Exception):
@@ -463,18 +472,37 @@ class RealBody:
         if time.perf_counter() < settle_until:
             time.sleep(settle_until - time.perf_counter())
         # Classify several frames separately and keep the clearest reading
-        # (averaging would mix in any frame still covered by static).
+        # (averaging would mix in any frame still covered by static). Frames
+        # washed out by a static burst are thrown away first: one such frame
+        # (white bands over half the picture) was once read as "4B empty,
+        # margin 11.7", the bot looked away from 4B with the right door
+        # open, and Freddy walked in (docs/DEVLOG.md).
+        wanted = CAMERA_FRAMES.get(camera, 2)
         frames, readings = [], []
-        for i in range(CAMERA_FRAMES.get(camera, 2)):
-            if i:
+        deadline = time.perf_counter() + 0.5
+        while len(frames) < wanted and time.perf_counter() < deadline:
+            if frames:
                 time.sleep(0.03)
             frame = self.ctl.window.grab()
             self._note_hud_on(frame)
+            if washed_out(frame):
+                continue
             frames.append(frame)
             readings.append(self.vision.read_camera(frame, camera))
+        if not readings:
+            log.info("camera %s: only static", camera)
+            return {"occupants": set(), "foxy_stage": None, "visible": False}
         best = max(range(len(readings)), key=lambda i: readings[i].margin)
-        reading, frames = readings[best], [frames[best]]
+        reading = readings[best]
         confident = reading.margin >= CAMERA_MIN_MARGIN.get(camera, 0.5)
+        if camera == "4B":
+            # 4B decides whether Freddy can get in while the bot looks
+            # elsewhere: it counts as empty only if every clean frame agrees
+            # and there were at least two of them.
+            seen = set().union(*(r.occupants for r in readings))
+            confident = confident and len(readings) >= 2 and all(not r.occupants for r in readings) == (not seen)
+            reading.occupants = frozenset(seen)
+        frames = [frames[best]]
         who = "".join(sorted(reading.occupants)) or "-"
         log.info("camera %s: %s foxy=%s margin=%.2f%s", camera, who, reading.foxy_stage, reading.margin,
                  "" if confident else " (not sure)")
