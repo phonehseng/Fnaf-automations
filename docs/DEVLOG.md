@@ -315,3 +315,14 @@ the click itself still waits for the planned moment, so no power is
 lost), and planned clicks keep an extra 0.3 s clear of a flip. And the
 body now warns whenever a timed wait ends more than 0.15 s late, naming
 the slowest screen read, so next time the culprit is in the log.
+
+**Found it, one night later.** The new warning "Monitor still showing
+when turning left - lowering it first" appeared four times in the next
+Night 4. `Controller.camera_down` took a single frame without a camera
+label as proof that the monitor was down - but right after the brain
+switches back to 4B before lowering, the switch static hides the label
+for a few frames. So the swipe was skipped, the monitor stayed up (door
+clicks are ignored while viewing, and Foxy's ticks were "covered" by a
+flip that never ended), and the next action paid for lowering it. Now the
+monitor only counts as down after 0.2 s without a label, and a believed-up
+monitor is always swiped.

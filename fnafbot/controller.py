@@ -49,6 +49,10 @@ LIT_FRAMES_WANTED = 2
 # Frames averaged per camera reading (TV static changes every frame).
 CAMERA_FRAMES = 2
 
+# The monitor counts as down only after no camera label has been seen for
+# this long (the static after a switch hides the label for a few frames).
+CAMERA_GONE_HOLD = 0.2
+
 # After ANY door or light click the game ignores all door/light clicks for
 # 10 frames (event [95] in docs/GAME_LOGIC.md): 10 / 60 s = 0.167 s. We wait
 # a little longer to be safe against frame-timing jitter.
@@ -233,18 +237,35 @@ class Controller:
             log.warning("Monitor did not come up (attempt %d)", attempt + 1)
         return False
 
+    def camera_gone(self, hold: float = CAMERA_GONE_HOLD) -> bool:
+        """True only if no camera label is seen for ``hold`` seconds in a row.
+
+        A single label-free frame proves nothing: the static burst right
+        after a camera switch hides the label for a few frames. Trusting one
+        such frame once left the monitor up while the bot believed it was
+        down - door clicks were ignored and Bonnie walked in (docs/DEVLOG.md)."""
+        deadline = time.perf_counter() + hold
+        while time.perf_counter() < deadline:
+            if self.camera_showing():
+                return False
+        return True
+
     def camera_down(self) -> bool:
         """Lower the monitor; True once the office is showing again (verified)."""
         for attempt in range(3):
-            if not self.camera_showing():
+            if not self.camera_is_up and self.camera_gone():
                 break
             self._swipe_camera_bar()
-            deadline = time.perf_counter() + 0.5
-            while time.perf_counter() < deadline and self.camera_showing():
-                pass
-            if not self.camera_showing():
+            deadline = time.perf_counter() + 0.7
+            down = False
+            while time.perf_counter() < deadline:
+                if self.camera_gone():
+                    down = True
+                    break
+            if down:
                 break
             log.warning("Monitor did not go down (attempt %d)", attempt + 1)
+            self.camera_is_up = True
         else:
             return False
         self.camera_is_up = False
