@@ -59,6 +59,14 @@ LEFT_LIGHT_BUTTON = (55, 460)
 RIGHT_DOOR_BUTTON = (1220, 350)
 RIGHT_LIGHT_BUTTON = (1220, 475)
 
+# Second click spot on each light button, used to switch the light OFF.
+# Windows turns two clicks on the same spot within ~0.5 s into a
+# "double-click", and the game ignores the second click of a double-click.
+# Clicking ~20 px away (still on the button) avoids that, so the light can be
+# switched off right after it is checked instead of wasting half a second.
+LEFT_LIGHT_BUTTON_OFF = (55, 482)
+RIGHT_LIGHT_BUTTON_OFF = (1220, 497)
+
 # The door button glows red when the door is open and green when closed.
 # Sampled from the middle of each button (screen coords, view fully panned).
 LEFT_DOOR_LAMP = Box(42, 300, 70, 370)
@@ -73,8 +81,9 @@ RIGHT_LIGHT_LAMP = Box(1207, 440, 1235, 510)
 # Hovering into this bar flips the monitor up (or back down). The game only
 # reacts when the cursor ENTERS the bar, so we swipe from above it to inside it.
 CAMERA_BAR = Box(258, 648, 852, 690)
-CAMERA_BAR_ABOVE = (555, 560)   # start of the swipe (outside the bar)
-CAMERA_BAR_INSIDE = (555, 670)  # end of the swipe (inside the bar)
+# x = 640 is inside the pan dead zone, so swiping never moves the office view.
+CAMERA_BAR_ABOVE = (640, 560)   # start of the swipe (outside the bar)
+CAMERA_BAR_INSIDE = (640, 670)  # end of the swipe (inside the bar)
 
 # Measured: after the swipe the flip animation takes ~0.43 s before the camera
 # picture is visible. Lowering hides the map in ~0.05 s, but the monitor
@@ -108,6 +117,11 @@ CAMERA_NAME = Box(820, 285, 1110, 325)
 # the monitor is up.
 CAMERA_MAP = Box(830, 330, 1240, 670)
 
+# The bot's own status panel (overlay.py) is drawn here, top centre. Nothing
+# the vision code relies on is in this strip, and it is listed in
+# CAMERA_IGNORE below so the panel never confuses the camera checks.
+OVERLAY = Box(430, 0, 850, 58)
+
 # Parts of a camera picture that are covered by the HUD/map and must be
 # ignored when comparing the picture to the reference images.
 CAMERA_IGNORE = (
@@ -115,6 +129,7 @@ CAMERA_IGNORE = (
     Box(1100, 0, 1280, 110),   # clock and night number
     Box(0, 600, 800, 720),     # power/usage text and the flip bar
     Box(0, 0, 160, 70),        # recording dot
+    OVERLAY,                   # the bot's status panel
 )
 
 # ---------------------------------------------------------------------------

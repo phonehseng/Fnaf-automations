@@ -77,9 +77,16 @@ class GameWindow:
         focus (an installer, a notification...). If that happened we restore
         it first, then wait for it to switch back to fullscreen.
         """
+        if win32gui.GetForegroundWindow() == self.hwnd and not win32gui.IsIconic(self.hwnd):
+            self.refresh_position()
+            return  # already in front: do nothing (see the ALT note below)
+
         # Windows only lets the program that the user last interacted with
         # change the foreground window. Tapping ALT counts as "interacting",
         # which lifts that restriction for our process.
+        # Side effect: ALT puts the game in "menu mode", which swallows the
+        # next mouse click. That is why this only runs when really needed,
+        # and why we send one harmless click afterwards (see below).
         user32 = ctypes.windll.user32
         user32.keybd_event(_VK_MENU, 0, 0, 0)
         user32.keybd_event(_VK_MENU, 0, _KEYEVENTF_KEYUP, 0)
@@ -98,6 +105,14 @@ class GameWindow:
             time.sleep(0.2)
         time.sleep(0.5)
         self.refresh_position()
+
+        # Cancel the ALT "menu mode" with a click on a spot that does nothing
+        # in any game screen: the empty middle of the top edge.
+        x, y = self.to_screen(640, 5)
+        user32.SetCursorPos(x, y)
+        user32.mouse_event(0x0002, 0, 0, 0, 0)  # left button down
+        user32.mouse_event(0x0004, 0, 0, 0, 0)  # left button up
+        time.sleep(0.05)
 
     def is_alive(self) -> bool:
         return bool(self.hwnd) and bool(win32gui.IsWindow(self.hwnd))
