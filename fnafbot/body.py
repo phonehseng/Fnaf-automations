@@ -47,6 +47,10 @@ LIT_THRESHOLD = 11.0
 # readings had margins >= 2.06).
 CAMERA_FRAMES = {"1C": 3}
 CAMERA_MIN_MARGIN = {"1C": 2.0, "4B": 0.5}
+# Seconds to wait after switching to a camera before reading it. The static
+# burst after a switch can outlast 0.12 s; Pirate Cove is not urgent, so it
+# waits longer (live readings were wrong when taken too early).
+CAMERA_SETTLE = {"1C": 0.3}
 
 # A doorway reading is only trusted if the best-matching game picture fits
 # better than the runner-up by at least this much (0-255 colour error).
@@ -327,11 +331,21 @@ class RealBody:
                 break
         # Right after switching cameras the picture is covered by a burst of
         # static; wait for it to fade (only needed after a switch).
-        settle_until = getattr(self, "_switched_at", 0.0) + layout.CAMERA_SWITCH_SECONDS
+        settle = CAMERA_SETTLE.get(camera, layout.CAMERA_SWITCH_SECONDS)
+        settle_until = getattr(self, "_switched_at", 0.0) + settle
         if time.perf_counter() < settle_until:
             time.sleep(settle_until - time.perf_counter())
-        frames = [self.ctl.window.grab() for _ in range(CAMERA_FRAMES.get(camera, 2))]
-        reading = self.vision.read_camera(frames, camera)
+        # Classify several frames separately and keep the clearest reading
+        # (averaging would mix in any frame still covered by static).
+        frames, readings = [], []
+        for i in range(CAMERA_FRAMES.get(camera, 2)):
+            if i:
+                time.sleep(0.03)
+            frame = self.ctl.window.grab()
+            frames.append(frame)
+            readings.append(self.vision.read_camera(frame, camera))
+        best = max(range(len(readings)), key=lambda i: readings[i].margin)
+        reading, frames = readings[best], [frames[best]]
         confident = reading.margin >= CAMERA_MIN_MARGIN.get(camera, 0.5)
         who = "".join(sorted(reading.occupants)) or "-"
         log.info("camera %s: %s foxy=%s margin=%.2f%s", camera, who, reading.foxy_stage, reading.margin,
