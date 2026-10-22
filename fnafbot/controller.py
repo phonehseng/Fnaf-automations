@@ -49,6 +49,11 @@ LIT_FRAMES_WANTED = 2
 # Frames averaged per camera reading (TV static changes every frame).
 CAMERA_FRAMES = 2
 
+# After ANY door or light click the game ignores all door/light clicks for
+# 10 frames (event [95] in docs/GAME_LOGIC.md): 10 / 60 s = 0.167 s. We wait
+# a little longer to be safe against frame-timing jitter.
+BUTTON_COOLDOWN = 0.19
+
 
 @dataclass
 class DoorwayCheck:
@@ -77,6 +82,20 @@ class Controller:
         # Latest frame and HUD reading, refreshed by grab().
         self.frame: np.ndarray | None = None
         self.hud = Hud()
+
+        # When the last door/light button was clicked (see BUTTON_COOLDOWN).
+        self._last_button_click = 0.0
+
+    def press(self, button: tuple[int, int]) -> float:
+        """Click a door or light button, first waiting out the game's click
+        cooldown so the click is never silently ignored. Returns the time
+        (time.perf_counter) at which the click was sent."""
+        wait = self._last_button_click + BUTTON_COOLDOWN - time.perf_counter()
+        if wait > 0:
+            time.sleep(wait)
+        self.mouse.click(*button)
+        self._last_button_click = time.perf_counter()
+        return self._last_button_click
 
     # ------------------------------------------------------------------
     # Looking
@@ -118,7 +137,7 @@ class Controller:
         if self.door_closed[side] == closed:
             return
         self.face(side)
-        self.mouse.click(*(layout.LEFT_DOOR_BUTTON if side == LEFT else layout.RIGHT_DOOR_BUTTON))
+        self.press(layout.LEFT_DOOR_BUTTON if side == LEFT else layout.RIGHT_DOOR_BUTTON)
         self.door_closed[side] = closed
         log.info("%s door %s", side, "CLOSED" if closed else "opened")
 
@@ -140,7 +159,7 @@ class Controller:
         door = layout.LEFT_DOOR_BUTTON if side == LEFT else layout.RIGHT_DOOR_BUTTON
         look = self.vision.bonnie_at_left_door if side == LEFT else self.vision.chica_at_right_window
 
-        self.mouse.click(*light)
+        self.press(light)
         lit_frames = self._collect_lit_frames(side)
 
         occupied, certain = False, False
@@ -152,14 +171,15 @@ class Controller:
         closed_now = False
         if occupied and not self.door_closed[side]:
             # DANGER FIRST: the door button is right above the light button.
-            self.mouse.click(*door)
+            # press() waits only for the game's 0.17 s click cooldown.
+            self.press(door)
             self.door_closed[side] = True
             closed_now = True
             log.info("%s at the %s door -> door CLOSED", "Bonnie" if side == LEFT else "Chica", side)
 
         # Light off again (saves power). A different spot on the same button,
         # so Windows does not merge the two clicks into a double-click.
-        self.mouse.click(*(layout.LEFT_LIGHT_BUTTON_OFF if side == LEFT else layout.RIGHT_LIGHT_BUTTON_OFF))
+        self.press(layout.LEFT_LIGHT_BUTTON_OFF if side == LEFT else layout.RIGHT_LIGHT_BUTTON_OFF)
         self.mouse.move(layout.PAN_LEFT_X if side == LEFT else layout.PAN_RIGHT_X, 400)
         return DoorwayCheck(side, occupied, certain, closed_now)
 

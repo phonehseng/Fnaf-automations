@@ -161,6 +161,12 @@ CLOCK_FONT = {0: 250, 1: 253, 2: 254, 3: 255, 4: 256, 5: 257, 6: 258, 7: 259, 8:
 # in progress and the HUD is visible (office or cameras).
 USAGE_LABEL = 190
 
+# Menu text sprites, used to know which screen is showing (score 0.98 - 1.0).
+TITLE_CONTINUE = 450      # "Continue" on the title screen
+TITLE_SIXTH_NIGHT = 444   # "6th Night" (only once the game is beaten)
+TITLE_CUSTOM_NIGHT = 527  # "Custom Night" (only once night 6 is beaten)
+CUSTOM_READY_BUTTON = 531 # "READY" on the Custom Night screen
+
 # Room-name labels shown above the camera map, used to confirm which camera
 # is on screen. Handle -> camera id. All are drawn with their top-left corner
 # at about (832, 292); the match score on live screenshots is 0.94 - 0.999.

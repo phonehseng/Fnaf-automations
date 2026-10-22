@@ -149,5 +149,5 @@ NIGHT_DIGIT = Box(1215, 68, 1240, 92)    # "1" in "Night 1"
 
 MENU_NEW_GAME = (270, 420)
 MENU_CONTINUE = (270, 490)
-MENU_SIXTH_NIGHT = (270, 560)
-MENU_CUSTOM_NIGHT = (270, 630)
+MENU_SIXTH_NIGHT = (285, 566)    # only shown once the game is beaten
+MENU_CUSTOM_NIGHT = (320, 634)   # only shown once night 6 is beaten
