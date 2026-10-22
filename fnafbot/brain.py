@@ -82,7 +82,11 @@ PAN_SECONDS = 0.55
 # Camera session for Foxy: the camera picture shows for about this long (just
 # long enough to contain one of the game's 0.1 s re-lock instants), or much
 # longer when the flip also reads 4B and looks at Pirate Cove.
-FREEZE_VIEW_SECONDS = 0.3
+# A hold view must contain one of the game's 0.1 s re-lock instants with
+# FOXY_CLOCK_MARGIN to spare on both sides: 0.1 + 2 x 0.12 = 0.34 s, plus
+# slack. (At 0.3 s most live ticks counted as "not covered" and the alert
+# procedure shut the left door several times a minute.)
+FREEZE_VIEW_SECONDS = 0.45
 COVE_CHECK_VIEW_SECONDS = 1.0
 # Foxy's lock is re-rolled only at the game's 0.1 s instants while a picture
 # shows, so everything about covering his ticks gets a wider clock margin
@@ -125,6 +129,9 @@ JIT_MIN_SLACK = 0.6
 # takes a moment longer to come down. A click 0.4 s late once let Bonnie
 # in (docs/DEVLOG.md); the click itself still waits for the planned moment.
 JIT_HEADROOM = 0.4
+# A blind reopen (see Brain._reopen_blind) needs at least this long before
+# their next tick: open (0.45 s), a quiet second or two, close again.
+REOPEN_MIN_WINDOW = 2.4
 
 
 class Body(Protocol):
@@ -377,7 +384,9 @@ class Brain:
         watch.door_closed = not watch.door_closed
         self._confirm_door_click(watch)
         duration = rules.DOOR_CLOSE_SECONDS if watch.door_closed else rules.DOOR_OPEN_SECONDS
-        watch.moving_until = self.body.now() + duration + CLOCK_MARGIN
+        # The game ignores a door click while the door is still moving, so
+        # the next click waits for the animation plus a frame or two.
+        watch.moving_until = self.body.now() + duration + CLOCK_MARGIN + 0.05
         if watch.door_closed:
             watch.closed_at = self.body.now()
             watch.close_at = None
@@ -707,6 +716,14 @@ class Brain:
         name = watch.who.capitalize()
         self.body.face(watch.side)
         self.body.wait_until(max(self.body.now(), watch.moving_until))
+        now = self.body.now()
+        # Only worth it with a real gap before their tick: the door takes
+        # 0.45 s to open and must start closing again JIT_MIN_LEAD before
+        # the tick. (A reopen with a 1 s window once ended with the closing
+        # click ignored because the door was still opening - and Bonnie in.)
+        if self._tick_after(watch, now) - now < REOPEN_MIN_WINDOW:
+            self.body.wait_until(now + 0.25)
+            return
         close_at = self._plan_close(watch)
         if close_at is None:
             # Their next tick is too close: leave the door shut and let a
