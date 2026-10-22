@@ -297,3 +297,21 @@ sides, and `_choose_job` shuts the second door early whenever two clicks
 are due too close together ("two doors due together"). The blind reopens
 double the number of just-in-time clicks on a busy night, which is what
 made this collision likely.
+
+---
+
+## 2026-10-22 - Live Night 4, fourth try: a click 0.4 s late (lost at 384 s)
+
+Bonnie on a blind-reopen cycle; a Foxy hold flip at 374.7 s; Bonnie's
+just-in-time click planned for 377.3 s landed at 377.7 s - his tick - and
+the two follow-up clicks were ignored: **once he is inside, the door
+button is dead** (`[96]`: `NOT bonnie overlapping "got you left"`). He
+killed when the next flip lowered the monitor.
+
+Where the 0.4 s went is not in the log yet (the flip's "monitor down"
+verification is the suspect), so two things changed: the bot now heads
+for a planned click 0.4 s earlier than strictly needed (`JIT_HEADROOM`;
+the click itself still waits for the planned moment, so no power is
+lost), and planned clicks keep an extra 0.3 s clear of a flip. And the
+body now warns whenever a timed wait ends more than 0.15 s late, naming
+the slowest screen read, so next time the culprit is in the log.

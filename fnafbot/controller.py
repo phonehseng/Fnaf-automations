@@ -120,6 +120,8 @@ class Controller:
     def face(self, side: str) -> None:
         """Turn the office view fully to ``side`` so its buttons are clickable."""
         if self.camera_is_up or self.camera_showing():
+            if not self.camera_is_up:
+                log.warning("Monitor still showing when turning %s - lowering it first", side)
             self.camera_down()
         target_pan = 0 if side == LEFT else layout.MAX_PAN
         self.mouse.move(layout.PAN_LEFT_X if side == LEFT else layout.PAN_RIGHT_X, 400)

@@ -52,6 +52,8 @@ SIGHTING_MAX_GAP = 0.12
 
 # Write the power left to the log this often (night seconds).
 POWER_LOG_EVERY = 30.0
+# Warn when a timed wait ends this much later than asked.
+WAIT_OVERSHOOT_WARN = 0.15
 
 # Doorway brightness (0-255 gray) above which the hall light counts as on
 # (only used to tell whether a light is still on before switching it off).
@@ -289,18 +291,26 @@ class RealBody:
 
     def wait_until(self, t: float) -> None:
         """Idle until night-time ``t``, watching the HUD meanwhile."""
+        slowest_look = 0.0
         while not self.over:
             remaining = t - self.now()
             if remaining <= 0:
-                return
+                break
             if remaining > 0.04:
+                started = time.perf_counter()
                 self._observe()
+                slowest_look = max(slowest_look, time.perf_counter() - started)
                 time.sleep(min(0.01, max(0.0, t - self.now() - 0.03)))
             else:
                 # Last few milliseconds: spin for precision.
                 while self.now() < t:
                     pass
-                return
+                break
+        overshoot = self.now() - t
+        if overshoot > WAIT_OVERSHOOT_WARN:
+            # Something in the loop took far longer than a look at the HUD
+            # should. Worth knowing: a late door click once cost a night.
+            log.warning("wait_until(%.2f) ended %.2f s late (slowest HUD look %.2f s)", t, overshoot, slowest_look)
 
     def night_over(self) -> bool:
         if not self.over:

@@ -120,6 +120,11 @@ JIT_DOORS = True
 JIT_MIN_LEAD = 0.4
 # Only plan a later close if at least this much time is left to choose from.
 JIT_MIN_SLACK = 0.6
+# Head for a planned click this long before it is needed (on top of the pan
+# and the click cooldown): slack for a slow screen read or a monitor that
+# takes a moment longer to come down. A click 0.4 s late once let Bonnie
+# in (docs/DEVLOG.md); the click itself still waits for the planned moment.
+JIT_HEADROOM = 0.4
 
 
 class Body(Protocol):
@@ -413,7 +418,7 @@ class Brain:
     def _jit_due(self, watch: DoorWatch) -> float:
         """When we must START heading for a planned door click: time to pan,
         plus a possible click cooldown, plus a safety margin."""
-        return watch.close_at - self._pan_time(watch.side) - BUTTON_COOLDOWN - 0.12
+        return watch.close_at - self._pan_time(watch.side) - BUTTON_COOLDOWN - JIT_HEADROOM
 
     def _choose_job(self, now: float):
         """Return the most urgent action to do right now, or None to wait.
@@ -646,7 +651,9 @@ class Brain:
         busy: list[tuple[float, float]] = []
         freeze = self._freeze_window(now)
         if freeze:
-            busy.append((freeze[0] - 0.05, freeze[1] + PAN_SECONDS + 0.05))
+            # After a flip the monitor's "down" is verified on screen, which
+            # can take a few tenths longer than the nominal animation.
+            busy.append((freeze[0] - 0.05, freeze[1] + PAN_SECONDS + 0.35))
         for other in (self.left, self.right):
             if other is not watch and other.close_at is not None:
                 # The other click may land a little late, needs its cooldown,
