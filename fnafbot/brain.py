@@ -142,6 +142,14 @@ JIT_MIN_SLACK = 0.6
 # takes a moment longer to come down. A click 0.4 s late once let Bonnie
 # in (docs/DEVLOG.md); the click itself still waits for the planned moment.
 JIT_HEADROOM = 0.1
+# The "certainly sent back at AI 20" shortcut (see _certainly_repelled) is
+# off: on the live game it was wrong twice - Chica stayed at the door through
+# a tick with the door fully shut (seen in the OBS footage) and walked in
+# once it was opened. Departures are always confirmed by a look instead
+# (Chica: through her window with the door shut; Bonnie: a blind reopen with
+# the closing click still planned until a look says he has gone).
+TRUST_AI20_PROOF = False
+
 # Can the doorway be checked with the door SHUT? Verified live on
 # 2026-10-22 (tools/check_shut_window.py): Chica's window is beside the right
 # door, not behind it, and reads normally; the left door covers Bonnie's
@@ -424,6 +432,8 @@ class Brain:
         animatronic's tick can overwrite the waiting move: then they simply
         stay at the door. (Assuming otherwise let Bonnie in on 5 of 200
         simulated 4/20 nights.)"""
+        if not TRUST_AI20_PROOF:
+            return False
         return (self.ai(tick)[watch.who] >= 20 and watch.seen_for_sure and watch.door_closed
                 and watch.closed_at <= tick - rules.DOOR_CLOSE_SECONDS - CLOCK_MARGIN)
 

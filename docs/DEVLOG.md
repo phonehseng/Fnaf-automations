@@ -715,3 +715,24 @@ to the brain's clock with `game_to_real` / `real_to_game`. Measured again
 
 Also from #6: a "certainly sent back" (AI 20) is now verified with one light
 check before their next tick instead of trusted outright.
+
+### Live 4/20 #7 (15:55): to 410 s, then Chica - read off the OBS footage
+
+The best run yet: past the 277 s mark, two Foxy escapes spotted and handled
+(he knocked on the shut left door both times, -1 % and -6 % on the HUD,
+exactly the game's formula). At ~410 s the log alone could not say who
+attacked, so the frames were pulled from the OBS recording at 5 fps: the
+right door is visibly shut (green lamp) through Chica's computed move at
+405.7 s, the bot logs "Chica certainly sent back (AI 20, door shut)", the
+door opens at 406.8 s, a light check at 408.7 s still shows her at the
+window, and at 409.4 s - the moment the monitor comes down - it is her
+jumpscare.
+
+So the AI-20 shortcut was wrong a second time, with the door fully shut:
+she simply did not move at that tick. Whatever the reason (an AI level one
+below 20 after a lost arrow click on the Custom Night screen, or the
+game's single move slot), the shortcut is now off (`TRUST_AI20_PROOF`).
+Departures are always confirmed by a look: Chica through her window with
+the door shut, Bonnie by a blind reopen whose closing click stays planned
+until a look says he has gone. Cost in the simulator: 4/20 59/60 at 12.3 %
+(was ~15 %).
