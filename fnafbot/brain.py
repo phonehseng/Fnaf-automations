@@ -1137,9 +1137,14 @@ class Brain:
             self.body.camera_down()
             return False
         self._view_started = self.body.now()
-        if self.camera_selected != "4B":
-            # Only on the very first flip of the night (the game starts on
-            # Show Stage); Freddy is still on stage then, so this is safe.
+        shown = self.body.shown_camera()
+        if self.camera_selected != "4B" or shown not in ("4B", None):
+            # Normally only on the very first flip of the night (the game
+            # starts on Show Stage). Otherwise a camera click was lost: the
+            # monitor came up on another camera, and with Freddy on 4B and
+            # the right door open that lets him in - switch to 4B at once.
+            if self.camera_selected == "4B":
+                log.warning("monitor came up on %s, not 4B - switching", shown)
             self.body.select_camera("4B")
             self.camera_selected = "4B"
         return True

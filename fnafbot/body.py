@@ -450,12 +450,27 @@ class RealBody:
         return self.ctl.camera_down()
 
     def select_camera(self, camera: str) -> None:
+        """Switch the monitor to ``camera`` and make sure it really switched
+        (a lost click would leave the monitor on the old camera - and the
+        monitor always comes back up on the last camera shown)."""
         self._check_stop()
         self._ensure_game()
-        if self.ctl.selected_camera != camera:
+        if self.ctl.selected_camera == camera and self.shown_camera() in (camera, None):
+            return
+        for attempt in range(3):
             self.ctl.mouse.click(*layout.CAMERA_BUTTONS[camera])
-            self.ctl.selected_camera = camera
             self._switched_at = time.perf_counter()
+            deadline = time.perf_counter() + 0.35
+            while time.perf_counter() < deadline:
+                if self.shown_camera() == camera:
+                    self.ctl.selected_camera = camera
+                    return
+            log.warning("camera click for %s was lost (attempt %d)", camera, attempt + 1)
+        self.ctl.selected_camera = camera
+
+    def shown_camera(self) -> str | None:
+        """The camera whose room label is on screen, or None (office)."""
+        return self.vision.current_camera(self.ctl.window.grab())
 
     def read_camera(self, camera: str) -> dict:
         """Read a camera picture: {'occupants', 'foxy_stage', 'visible'}."""

@@ -676,3 +676,17 @@ All three are essentially on time. This morning's camera-based numbers
 time, which slows the power clock it was measured against. The brain now
 uses -0.05 / -0.05 / -0.1 s (erring early, the safe side for door clicks).
 Both measurement nights ran the power clock at exactly 1.0000 real s.
+
+### Live 4/20 #5 (15:23): lost at ~276 s with 50 % power - cause not certain
+
+The best run so far (past the half-way mark at 58 %). At 268 s the 4B
+picture was black (the game blanks a camera when someone moves in that
+room), at 275.5 s the right light would not come on twice, then the monitor
+would not come up - in the game's rules that is Freddy in the office.
+Freddy can only get in while the monitor shows a camera other than 4B, and
+the bot never checked which camera a flip-up actually showed: a lost click
+after the 255 s cove check would have left the monitor on Pirate Cove for
+every later "hold on 4B" flip. Not proven, so two cheap guards went in:
+every camera switch is verified on screen (and retried), and after every
+flip-up the room label is read and the monitor switched to 4B if needed,
+with a warning in the log - the next run will show whether it happens.

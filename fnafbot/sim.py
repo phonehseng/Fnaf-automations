@@ -515,6 +515,9 @@ class SimBody:
         self.sim.pending_camera_select = camera
         self.sim.step()
 
+    def shown_camera(self) -> str | None:
+        return self.sim.viewing
+
     def read_camera(self, camera: str) -> dict:
         """What the camera shows: {'occupants': set, 'foxy_stage': int|None,
         'visible': bool}. Freddy is only reported where the real vision can
