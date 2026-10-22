@@ -687,6 +687,12 @@ class Brain:
         self.body.select_camera("1C")
         self.camera_selected = "1C"
         view = self.body.read_camera("1C")
+        if view["visible"] and view["foxy_stage"] == 3:
+            # "Foxy has gone" triggers the emergency procedure, so make sure:
+            # look again (the TV static is different in every frame).
+            second = self.body.read_camera("1C")
+            if not (second["visible"] and second["foxy_stage"] == 3):
+                view = second
         self.body.select_camera("4B")
         self.camera_selected = "4B"
         if not view["visible"] or view["foxy_stage"] is None:

@@ -38,6 +38,13 @@ CAPTURE_LATENCY = 0.015
 # (only used to tell whether a light is still on before switching it off).
 LIT_THRESHOLD = 11.0
 
+# Camera readings: how many frames to average (TV static changes every frame)
+# and how clear a reading must be to be trusted. Pirate Cove decides whether
+# Foxy has left, so it gets more frames and a higher bar (correct synthetic
+# readings had margins >= 2.06).
+CAMERA_FRAMES = {"1C": 3}
+CAMERA_MIN_MARGIN = {"1C": 2.0, "4B": 0.5}
+
 # A doorway reading is only trusted if the best-matching game picture fits
 # better than the runner-up by at least this much (0-255 colour error).
 # Measured on live frames: correct answers had margins of 2.8 - 29.
@@ -66,6 +73,8 @@ class RealBody:
         self.t0 = 0.0                       # perf_counter() at the night's first frame
         self.t0_upper_bound = 0.0           # best proven upper bound on the true night start
         self.last_hud_seen = 0.0
+        self.hud_missing_since: float | None = None   # first look that found no HUD
+        self.hud_missing_count = 0                     # looks in a row without the HUD
         self.last_power: int | None = None
         self.over = False
         self.facing: str | None = None
@@ -129,13 +138,22 @@ class RealBody:
         stamp = time.perf_counter()
         if hud.visible:
             self.last_hud_seen = stamp
+            self.hud_missing_since = None
+            self.hud_missing_count = 0
             if hud.power is not None:
                 if self.last_power is not None and hud.power != self.last_power:
                     self._calibrate(stamp)
                 self.last_power = hud.power
             self.ctl.hud = hud
-        elif stamp - self.last_hud_seen > HUD_GONE_SECONDS:
-            self.over = True
+        else:
+            # The HUD can be hidden for a few frames (e.g. by the monitor
+            # animation). Only a HUD that stays missing across several looks
+            # for HUD_GONE_SECONDS means the night is really over.
+            if self.hud_missing_since is None:
+                self.hud_missing_since = stamp
+            self.hud_missing_count += 1
+            if self.hud_missing_count >= 5 and stamp - self.hud_missing_since > HUD_GONE_SECONDS:
+                self.over = True
         return frame
 
     def wait_until(self, t: float) -> None:
@@ -154,7 +172,7 @@ class RealBody:
                 return
 
     def night_over(self) -> bool:
-        if not self.over and time.perf_counter() - self.last_hud_seen > 0.3:
+        if not self.over:
             self._observe()
         return self.over
 
@@ -264,14 +282,18 @@ class RealBody:
         settle_until = getattr(self, "_switched_at", 0.0) + layout.CAMERA_SWITCH_SECONDS
         if time.perf_counter() < settle_until:
             time.sleep(settle_until - time.perf_counter())
-        frames = [self.ctl.window.grab() for _ in range(2)]
+        frames = [self.ctl.window.grab() for _ in range(CAMERA_FRAMES.get(camera, 2))]
         reading = self.vision.read_camera(frames, camera)
-        log.info("camera %s: %s foxy=%s margin=%.2f", camera, "".join(sorted(reading.occupants)) or "-",
-                 reading.foxy_stage, reading.margin)
+        confident = reading.margin >= CAMERA_MIN_MARGIN.get(camera, 0.5)
+        who = "".join(sorted(reading.occupants)) or "-"
+        log.info("camera %s: %s foxy=%s margin=%.2f%s", camera, who, reading.foxy_stage, reading.margin,
+                 "" if confident else " (not sure)")
+        label = f"stage{reading.foxy_stage}" if camera == "1C" else who
+        self._save_evidence(frames[-1], f"cam{camera}_{label}_{reading.margin:.1f}")
         return {
             "occupants": set(reading.occupants),
             "foxy_stage": reading.foxy_stage,
-            "visible": reading.confident,
+            "visible": confident,
         }
 
     def power(self) -> int:
