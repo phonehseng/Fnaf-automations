@@ -425,6 +425,14 @@ click. Simulated night 4: 30/30 at ~12 %; night 5 is still tight
 (22/30) - the margins that make the timing safe cost about ten points of
 power, and night 5's baseline alone is ~71 %.
 
+**Chica measured properly** (06:58, `--who chica`, residuals against
+k x 4.98 real seconds): +0.59 s (k=19), +0.62 s (k=23), +0.79 s (k=42).
+So both timers sit about half a second after the bot's night start
+(`TICK_PHASE`: Bonnie 0.5, Chica 0.6) - the earlier "Chica has no offset"
+reading came from a lost click, not from her timer. Lost door clicks are
+therefore a problem of their own: the bot now saves a screenshot whenever
+the door button's lamp says a click was ignored.
+
 **Also noted (from the user):** the hall light works with the door shut,
 and on the right side Chica's window is beside the door, so a peek on
 the right may not need the door open at all. The simulator assumes a
