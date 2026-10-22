@@ -19,9 +19,12 @@ _user32 = ctypes.windll.user32
 _MOUSEEVENTF_LEFTDOWN = 0x0002
 _MOUSEEVENTF_LEFTUP = 0x0004
 
-# How long the button is held for a click. The game polls input every frame
-# (~60 fps = 16 ms), so the press must last at least one frame to register.
-CLICK_HOLD_SECONDS = 0.02
+# How long the button is held for a click. The game polls input once per
+# frame - usually 16 ms apart, but gaps of up to 35 ms were measured live
+# (tools/measure_fps.py), and a 20 ms press could fall entirely inside such
+# a gap: the game then never saw it. A door click lost that way cost a
+# night (docs/DEVLOG.md), so the press now lasts three frames.
+CLICK_HOLD_SECONDS = 0.05
 
 # Small pause after moving before clicking, so the game sees the cursor at the
 # new position before it sees the button press.

@@ -91,14 +91,18 @@ FOXY_ALERT_SECONDS = 3.0
 # If a hall light fails to come on this close to their tick, shut the door
 # instead of trying the light again.
 LIGHT_FAIL_SHUT_LEAD = 1.3
+# How long after a door click to wait before reading the button's lamp.
+DOOR_LAMP_SETTLE = 0.05
 
 # Just-in-time doors (see Brain._plan_close): shut the door shortly before
 # Bonnie's/Chica's next tick instead of the moment they are seen.
 JIT_DOORS = True
 # The door click must land at least this long before their tick. A closing
 # door already blocks them, so this only has to cover clock error (~0.03 s),
-# click delay (one frame) and a generous safety margin.
-JIT_MIN_LEAD = 0.3
+# click delay (one frame), and - should the game miss the click - reading
+# the button's lamp (0.05 s) plus one click cooldown (0.19 s) for a second
+# click that still lands before the tick (see _confirm_door_click).
+JIT_MIN_LEAD = 0.45
 # Only plan a later close if at least this much time is left to choose from.
 JIT_MIN_SLACK = 0.6
 
@@ -338,11 +342,29 @@ class Brain:
         self.body.wait_until(max(self.body.now(), watch.moving_until))
         self._press("door", watch.side)
         watch.door_closed = not watch.door_closed
+        self._confirm_door_click(watch)
         duration = rules.DOOR_CLOSE_SECONDS if watch.door_closed else rules.DOOR_OPEN_SECONDS
         watch.moving_until = self.body.now() + duration + CLOCK_MARGIN
         if watch.door_closed:
             watch.closed_at = self.body.now()
             watch.close_at = None
+
+    def _confirm_door_click(self, watch: DoorWatch) -> None:
+        """Make sure the game saw the door click.
+
+        The game occasionally misses a click (a live replay was lost when a
+        just-in-time click never closed the door - docs/DEVLOG.md). The
+        door button's lamp changes colour the moment a click is accepted,
+        so read it and click again if nothing happened."""
+        wanted = "closed" if watch.door_closed else "open"
+        for _ in range(2):
+            self.body.wait_until(self.body.now() + DOOR_LAMP_SETTLE)
+            seen = self.body.door_state(watch.side)
+            if seen is None or seen == wanted:
+                return
+            log.warning("%s door click was lost (button still %s) - clicking again", watch.side, seen)
+            self.body.wait_until(max(self.body.now(), self.last_press_at + BUTTON_COOLDOWN))
+            self._press("door", watch.side)
 
     def _next_commitment(self, now: float) -> float:
         """The next moment the bot must be free for something precise: a

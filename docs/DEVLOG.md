@@ -125,3 +125,33 @@ Two fixes in `Brain`:
 Also seen: "light did not come on" happened 9 times in the campaign without
 anyone inside. Those clicks are lost somewhere between the mouse and the
 game; the retry handles it, but it is worth measuring (TODO).
+
+---
+
+## 2026-10-22 - Replay 2: the door click that never happened (lost at 141 s)
+
+Third replay of Night 3, 03:07. Chica was seen at the window at 136.3 s;
+the door click went out at 139.1 s, 0.34 s before her tick at 139.44 s -
+which has worked dozens of times (a door that is still closing makes her
+wait). This time she walked in. The peek 1.5 s later found the light dead
+(the tell again) and the jumpscare followed.
+
+Nothing in the log explains it, which is the explanation: the game never
+saw the click. The mouse button was held for 20 ms, and
+`tools/measure_fps.py` had measured frame gaps of up to 35 ms - a press
+that starts just after one frame polls the mouse and ends before the next
+one is invisible to the game. That also explains the nine "light did not
+come on" retries in the campaign log: same lost clicks, on the light
+button, where a retry is harmless.
+
+**Fix.**
+1. `mouse.py`: hold the button for 50 ms (three frames).
+2. `Brain._confirm_door_click`: after every door click, read the door
+   button's lamp (it changes colour the instant the game accepts a click);
+   if it did not change, click again after the cooldown. Both bodies (real
+   and simulated) expose `door_state(side)`.
+3. `JIT_MIN_LEAD` 0.30 -> 0.45 s so that the second click still lands
+   before their tick.
+
+The simulator never loses clicks, so this could only have been found on
+the real game - one more reason to keep replaying nights on camera.

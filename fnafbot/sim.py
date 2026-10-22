@@ -451,6 +451,14 @@ class SimBody:
         self.advance(READ_SECONDS)
         return self.sim.light[side]
 
+    def door_state(self, side: str) -> str | None:
+        """The door button's lamp: 'closed' from the moment a closing click
+        is accepted (the simulator never loses clicks, but the brain checks)."""
+        self.advance(READ_SECONDS)
+        if self.facing != side:
+            return None
+        return "closed" if self.sim.door[side] in (CLOSING, CLOSED) else "open"
+
     # -- camera
     def camera_up(self) -> bool:
         if self.sim.camera_state == "up":

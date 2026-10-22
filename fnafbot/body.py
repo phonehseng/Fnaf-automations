@@ -315,6 +315,14 @@ class RealBody:
         self.ctl.press(spot)
         log.debug("pressed %s %s at %.3f", kind, side, self.now())
 
+    def door_state(self, side: str) -> str | None:
+        """'closed' or 'open', read from the door button's lamp (it changes
+        colour the instant the game accepts a click). None if that side is
+        not in view."""
+        if self.facing != side:
+            return None
+        return self.vision.door_lamp(self.ctl.window.grab(), side)
+
     def _lit(self, frame: np.ndarray, side: str) -> bool:
         rows, cols = DOORWAY_REGION[side]
         return float(cv2.cvtColor(frame[rows, cols], cv2.COLOR_BGR2GRAY).mean()) > LIT_THRESHOLD
