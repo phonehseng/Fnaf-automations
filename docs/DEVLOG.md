@@ -852,3 +852,31 @@ jump, small drift), 40 nights each: the previous brain survives 1/40 4/20
 and 0/40 6th Nights (Bonnie, every time - as live); the new one 36/40
 (6.0 % left) and 36/40 (8.4 %), every loss a power-out. Night 5 29/40
 (6.9 %): the lag costs power everywhere, and Night 5 has the least spare.
+
+### Live 4/20 #9 (17:25): Foxy at ~158 s, 69 % power
+
+First live run with lag tracking. One lag sample (29.7 s: 0.04 - 0.10 s,
+Bonnie and Chica ambiguous), none after - nobody stood at a shut door at a
+moment that did not collide with a Foxy flip. Three early Foxy ticks went
+uncovered (one given up for that sample), the alerts shut the left door
+from 73 s, and the cove pictures at 77, 85 and 94 s were static (the game
+blanks a camera when someone moves in it - Foxy changing stage); the one
+at 100.9 s was a clean stage 0 (curtains shut, "out of order" sign) - most
+likely he had knocked on the shut door and been reset (event [324]: back
+to Random(2)). Then every flip until 154 s logged its tick as covered,
+and at ~158 s Foxy ran in through the open left door (OBS frames).
+
+From a real stage 0 at 100 s to a run at 158 s takes three free ticks in
+~35 s. With a flip every cycle, the decompiled rules make that very
+unlikely if the ticks come a little AFTER the flips (the lock lasts
+50 + Random(1000) frames after the monitor comes down, 9 s on average) -
+but likely if they come BEFORE them (four seconds after the previous view,
+the lock has run out about one time in five). So Foxy's timer may have
+been early relative to the model, which nothing measured so far explains
+(his phase came from knocks on a quiet night, assuming the 1500-frame
+fuse runs at 60 fps). Open.
+
+Simulator experiments with the lag model's jump widened to 1.0 s (40
+nights): the committed brain 35/40 6th Nights, 30/40 4/20 - covering more
+of the lag range in Foxy flips, or holding the first sample back until the
+lag settles, all came out worse (power).

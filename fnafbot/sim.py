@@ -44,7 +44,7 @@ CAMERA_DISRUPTION_FRAMES = 300
 # Two parts, both drawn per night, as measured on cold-started nights: a
 # jump to 0.5 - 0.85 s in the first minute and a half, and a small drift
 # after that.
-TIMER_LAG_JUMP = (0.4, 0.85)
+TIMER_LAG_JUMP = (0.4, 1.0)
 TIMER_LAG_START = (15.0, 35.0)       # seconds into the night the jump starts
 TIMER_LAG_BUILDUP = (10.0, 30.0)     # its time constant, seconds
 MAX_TIMER_LAG_RATE = 0.0008          # the drift, seconds per second ...
