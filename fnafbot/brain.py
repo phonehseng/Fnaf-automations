@@ -428,10 +428,21 @@ class Brain:
         door button's lamp changes colour the moment a click is accepted,
         so read it and click again if nothing happened."""
         wanted = "closed" if watch.door_closed else "open"
-        for _ in range(2):
+        for attempt in range(3):
+            # Two looks: the game applies a click on its next frame and the
+            # screenshot lags another, so one early look can show the old
+            # colour. A click repeated on that evidence would TOGGLE the
+            # door the wrong way.
             self.body.wait_until(self.body.now() + DOOR_LAMP_SETTLE)
             seen = self.body.door_state(watch.side)
             if seen is None or seen == wanted:
+                return
+            self.body.wait_until(self.body.now() + DOOR_LAMP_SETTLE)
+            seen = self.body.door_state(watch.side)
+            if seen is None or seen == wanted:
+                return
+            if attempt == 2:
+                log.warning("%s door click lost three times - giving up (button %s)", watch.side, seen)
                 return
             log.warning("%s door click was lost (button still %s) - clicking again", watch.side, seen)
             self.body.snapshot(f"lost_click_{watch.side}")

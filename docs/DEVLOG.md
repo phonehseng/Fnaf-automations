@@ -437,6 +437,18 @@ the door button's lamp says a click was ignored.
 533.4 s, 8 % power left, 2 of 40 Foxy flips uncovered, one door click
 lost and retried. Night 5 started straight after with the same code.
 
+**Night 5 won** (07:24): 6 AM at 533.9 s with 2 % left - usage sat at 1
+for most of the night, so this was the baseline drain plus the extra
+charges of the (deliberately wide) door margins. The bot went on to the
+6th Night on its own.
+
+**Lost clicks, a hypothesis.** The door-button lamp is read 0.03 s after
+a click; the game applies the click on its next frame and the screenshot
+lags one more, so an early look can still show the old colour and the
+"retry" then toggles the door the wrong way. The confirmation now looks
+twice before retrying and gives up after three lost clicks instead of
+clicking blindly.
+
 **Also noted (from the user):** the hall light works with the door shut,
 and on the right side Chica's window is beside the door, so a peek on
 the right may not need the door open at all. The simulator assumes a
