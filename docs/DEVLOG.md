@@ -904,3 +904,18 @@ assumes, so Foxy's ticks were not early on live #9 - that loss is still
 not explained by the timing model; the likeliest reading is a lag much
 larger than on the measurement nights (4/20 loads far more) that the bot
 had no sample of.
+
+### Live 4/20 #10 (19:16): out of power at ~388 s
+
+Nobody got in; the battery ran out. The log explains it: not a single lag
+sample all night (0 departure watches), so every margin stayed at the wide
+"not measured yet" setting. From ~180 s Bonnie's door went into a loop of
+blind reopens ("Bonnie may still be there - door open until ..., then shut
+again", 40+ times): opened after his tick, shut again before the next,
+never looked through - and a watch only counts on the first tick after he
+was last SEEN at the door, so once he was not re-seen no watch could ever
+be planned again. Foxy cost the rest: views that came up ~0.1 s later than
+planned counted his ticks as uncovered (stage 3 possible by 119 s), and
+four alerts shut the left door and looked at the cove (it showed him at
+stage 1 at 141.7 s - he really was advancing). Also seen: the power-clock
+fit jumped by +1.46 s at 372 s.
