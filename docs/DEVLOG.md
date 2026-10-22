@@ -230,3 +230,52 @@ Lessons:
 
 The bot now writes the power left to the log every 30 s so the next loss
 can be read as a curve instead of a guess.
+
+---
+
+## 2026-10-22 - Live Night 4 again: Foxy, through a door the bot thought was safe
+
+Second try at Night 4 (03:42), with the cove-check fix. Lost at 199 s with
+69 % power: the Game Over screen, no HUD, the monitor refusing to come up.
+The log shows Foxy seen at stage 2 at 164 s, then a "hold" flip every
+5 s, each one believed to cover his tick - and nothing else. Foxy attacks
+25 s after reaching stage 3, so he must have reached it around 172-175 s
+*through* one of those flips, and the left door was open when he ran.
+
+Back to the decompiled events, which settle it:
+
+* `[130]` hovering the flip bar only starts the flip-up *animation*;
+  `[133]` sets `viewing` when that animation **finishes**; `[329]` re-rolls
+  Foxy's lock every 0.1 s **while viewing > 0**; `[313]` the lock counts
+  down one per frame; `[191]` Foxy may only move while the lock is 0 and
+  the monitor is not on 1C (`viewing != 99`; 4B is 42).
+* A hold flip lowered the monitor as little as 60 ms after the first
+  0.1 s instant it assumed. The night-start fit wobbles by +-70 ms, so
+  that instant could fall just outside the picture - no re-roll, lock 0,
+  Foxy free to move.
+* The routine cove re-check ran every 30 s; Foxy's fuse is 25 s.
+
+**Fix.** Everything about Foxy's lock now uses a 0.12 s clock margin
+(`FOXY_CLOCK_MARGIN`); a hold flip keeps the picture up for at least
+0.3 s; the cove is re-checked every 15 s. And the simulator's body now has
+a wandering clock error of up to 0.07 s, so timing that only works with a
+perfect clock fails in the simulator first.
+
+**What the wandering clock found at once** (all fixed the same hour):
+* Bonnie/Chica walked in when a door was reopened on the very frame of
+  their tick: the brain had booked the tick as "passed" 0.12 s after its
+  own idea of the time. Now a tick counts as upcoming until 0.2 s after
+  it (`TICK_SETTLE`, used by every "their next tick" calculation).
+* A peek (open the door, look) was started with an optimistic time
+  estimate and overran the other door's just-in-time click by a quarter
+  of a second. The estimate now includes the cooldowns and a margin, and
+  the peek re-checks the other door's deadline right before opening.
+* With wider margins, peeks often no longer fit between a tick and the
+  next Foxy flip and the door stayed shut for whole 5 s cycles (0.5 %
+  each). New "blind reopen": open the door right after their tick, plan
+  the just-in-time click for the next one, and look whenever there is
+  time.
+
+Simulated with the wandering clock: nights 1, 4, 5: 60/60 each; 4/20:
+40/40 but only ~7 % power left on average (it was 17 % with a perfect
+clock). The margins cost power; tuning continues on the live game.

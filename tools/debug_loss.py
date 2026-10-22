@@ -52,7 +52,10 @@ def main() -> None:
                     print("  " + line)
             print("--- brain actions ---")
             for line in handler.lines:
-                t = float(line.split("s", 1)[0])
+                try:
+                    t = float(line.split("s", 1)[0])
+                except ValueError:
+                    continue   # a warning without a time stamp (e.g. a lost click)
                 if t > end - args.window:
                     print("  " + line)
             return

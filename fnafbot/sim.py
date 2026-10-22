@@ -20,6 +20,7 @@ Simplifications (all on the safe side for testing):
 
 from __future__ import annotations
 
+import math
 import random
 from dataclasses import dataclass, field
 
@@ -68,6 +69,7 @@ class NightSim:
     """The game's night logic. Call step() once per frame."""
 
     def __init__(self, night: int, custom: dict[str, int] | None = None, seed: int | None = None) -> None:
+        self.seed = seed                  # also seeds the simulated body's clock error
         self.rng = random.Random(seed)
         self.night = night
         self.custom = custom
@@ -385,8 +387,12 @@ class NightSim:
 # simulated power use matches what the real bot spends.
 PAN_SECONDS = 0.55          # full pan from one side to the other
 READ_SECONDS = 0.035        # grab a frame and analyse it
-DOORWAY_READ_SECONDS = 0.07
-LAMP_READ_SECONDS = 0.015        # one screenshot, one small patch (door button lamp) # wait for a lit frame and classify it
+DOORWAY_READ_SECONDS = 0.07     # wait for a lit frame and classify it
+LAMP_READ_SECONDS = 0.015       # one screenshot, one small patch (door button lamp)
+# The real bot's clock is never exact: the fitted night start wobbles by a
+# few hundredths of a second. The simulated body's clock wanders the same
+# way, so timing that only works with a perfect clock fails here too.
+CLOCK_ERROR_SECONDS = 0.07
 CAMERA_SETTLE_SECONDS = 0.12  # static burst after raising/switching (body.CAMERA_SETTLE default)
 COVE_SETTLE_SECONDS = 0.3     # Pirate Cove waits longer (body.CAMERA_SETTLE["1C"])
 CAMERA_READ_SECONDS = 0.08    # 2-3 frames grabbed and classified
@@ -397,14 +403,23 @@ BUTTON_COOLDOWN = 0.19      # same safety spacing as controller.BUTTON_COOLDOWN
 class SimBody:
     """Plays a NightSim through the same methods as the real game body."""
 
-    def __init__(self, sim: NightSim) -> None:
+    def __init__(self, sim: NightSim, clock_error: float = CLOCK_ERROR_SECONDS) -> None:
         self.sim = sim
         self.facing: str | None = None
         self._last_button_click = -1.0
+        # Slow, bounded wander of the clock (two sine waves with random
+        # phases): the brain only ever sees now(), never the true time.
+        rng = random.Random(f"clock-{getattr(sim, 'seed', 0)}")
+        self._phase = (rng.uniform(0, 2 * math.pi), rng.uniform(0, 2 * math.pi))
+        self._error = clock_error
 
     # -- time
+    def _clock_error(self) -> float:
+        t = self.sim.now
+        return self._error * (0.7 * math.sin(t / 41.0 + self._phase[0]) + 0.3 * math.sin(t / 7.0 + self._phase[1]))
+
     def now(self) -> float:
-        return self.sim.now
+        return self.sim.now + self._clock_error()
 
     def advance(self, seconds: float) -> None:
         target = self.sim.frame + max(1, round(seconds * FPS))
@@ -412,7 +427,7 @@ class SimBody:
             self.sim.step()
 
     def wait_until(self, t: float) -> None:
-        while self.sim.now + 1e-9 < t and not self.sim.over:
+        while self.now() + 1e-9 < t and not self.sim.over:
             self.sim.step()
 
     def night_over(self) -> bool:
@@ -428,8 +443,11 @@ class SimBody:
 
     def press(self, kind: str, side: str) -> None:
         """Click a door/light button. Like the real controller, first wait out
-        the game's 10-frame click cooldown so the click is never ignored."""
-        self.wait_until(self._last_button_click + BUTTON_COOLDOWN)
+        the game's 10-frame click cooldown so the click is never ignored.
+        (The real controller times this with the computer's own clock, so it
+        is exact: use the true simulated time here, not the wandering one.)"""
+        while self.sim.now + 1e-9 < self._last_button_click + BUTTON_COOLDOWN and not self.sim.over:
+            self.sim.step()
         self.sim.pending_clicks.append((kind, side))
         self._last_button_click = self.sim.now
         self.advance(CLICK_SECONDS)

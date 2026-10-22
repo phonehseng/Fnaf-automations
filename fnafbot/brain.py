@@ -43,15 +43,21 @@ LEFT, RIGHT = "left", "right"
 # measured game behaviour.
 # ---------------------------------------------------------------------------
 
-# Our idea of "now" can be off by up to ~0.03 s; every precise plan keeps
-# at least this much distance from a deadline.
-CLOCK_MARGIN = 0.06
+# Our idea of "now" can be off by several hundredths of a second (the night
+# start and the length of a game second are both measured, not known);
+# every precise plan keeps at least this much distance from a deadline.
+CLOCK_MARGIN = 0.1
+# Only count an animatronic's tick as passed this long after it: the clock
+# can be off by CLOCK_MARGIN and the game fires the tick on a whole frame.
+# A door reopened on the very frame of their tick lets them in (the move
+# simply waits for the door animation to finish), so this must be generous.
+TICK_SETTLE = 0.2
 
 # Clicks are ignored for 10 frames after a door/light click.
 BUTTON_COOLDOWN = 0.19
 
 # Keep extra power use this far away from each whole-second power charge.
-POWER_TICK_GUARD = 0.06
+POWER_TICK_GUARD = 0.08
 
 # A doorway check (light on -> look -> light off) keeps the light on this
 # long on the real game (the off-click must wait out the 0.17 s click
@@ -60,11 +66,11 @@ LIGHT_CHECK_SECONDS = 0.3
 
 # Start checking this long after the animatronic's tick (the move happens on
 # that frame; we wait a couple of frames to be sure it has been applied).
-AFTER_TICK = 0.06
+AFTER_TICK = 0.2
 
 # Keep a hall light off this close to Bonnie's or Chica's ticks (an arrival
 # or departure switches the lights off - see quiet_light_start()).
-MOVE_TICK_GUARD = 0.08
+MOVE_TICK_GUARD = 0.15
 
 # The light must be switched on at least this long before the animatronic's
 # next tick, so that if they are there the door click (which has to wait for
@@ -76,17 +82,23 @@ PAN_SECONDS = 0.55
 # Camera session for Foxy: the camera picture shows for about this long (just
 # long enough to contain one of the game's 0.1 s re-lock instants), or much
 # longer when the flip also reads 4B and looks at Pirate Cove.
-FREEZE_VIEW_SECONDS = 0.25
+FREEZE_VIEW_SECONDS = 0.3
 COVE_CHECK_VIEW_SECONDS = 1.0
+# Foxy's lock is re-rolled only at the game's 0.1 s instants while a picture
+# shows, so everything about covering his ticks gets a wider clock margin
+# than the rest (the fitted clock wobbles by a few hundredths).
+FOXY_CLOCK_MARGIN = 0.12
 # The camera must go down no earlier than this before Foxy's tick: the lock
 # set at the last re-lock lasts at least 50 frames (0.833 s).
-FREEZE_LATEST_GAP = 0.833 - 0.1 - CLOCK_MARGIN
+FREEZE_LATEST_GAP = 0.833 - 0.1 - FOXY_CLOCK_MARGIN
 
-# Re-check Pirate Cove (only when it is safe) at least this often.
-FOXY_VERIFY_EVERY = 30.0
+# Re-check Pirate Cove (only when it is safe) at least this often. Foxy
+# attacks 25 s after reaching stage 3, so a missed stage must be noticed
+# well inside that.
+FOXY_VERIFY_EVERY = 15.0
 # After someone was seen on 4B, assume it stays blocked this long before
 # planning another routine cove check.
-FOUR_B_BUSY_SECONDS = 10.0
+FOUR_B_BUSY_SECONDS = 20.0
 # Roughly how long a Foxy alert (shut the left door, look at the cove, maybe
 # shut the right door first) keeps the bot busy; used to let an urgent
 # doorway check go first.
@@ -253,6 +265,14 @@ class Brain:
             t += 0.02
         return best_without_move_tick if best_without_move_tick is not None else earliest
 
+    @staticmethod
+    def _tick_after(watch: DoorWatch, now: float) -> float:
+        """Their next tick as far as the bot can be sure: a tick less than
+        TICK_SETTLE ago may not have happened yet on the game's clock, so it
+        still counts as upcoming. (Opening a door on the frame of their
+        tick lets them in - found with the simulator's wandering clock.)"""
+        return rules.next_tick(watch.tick, now - TICK_SETTLE)
+
     def _moves_since(self, watch: DoorWatch, after: float, until: float) -> int:
         """How many of their ticks (with AI > 0) fall in (after, until]."""
         ticks = rules.tick_times(watch.tick, after + 1e-6, until + 1e-6)
@@ -278,6 +298,10 @@ class Brain:
     # ------------------------------------------------------------------
 
     def _account_for_ticks(self, now: float) -> None:
+        # A tick only counts as passed once the clock is certainly past it;
+        # otherwise a doorway check could run just BEFORE the real tick and
+        # report "empty" about a doorway they are about to step into.
+        now -= TICK_SETTLE
         for watch in (self.left, self.right):
             for tick in rules.tick_times(watch.tick, watch.last_tick_seen + 1e-6, now + 1e-6):
                 watch.last_tick_seen = tick
@@ -304,12 +328,12 @@ class Brain:
         earlier. (A picture that appears a moment before the tick, but after
         the last 0.1 s instant, does NOT protect it.)"""
         for start, end in self.view_intervals[-4:]:
-            first = start + CLOCK_MARGIN          # picture certainly showing from here ...
-            last = min(end, tick) - CLOCK_MARGIN  # ... until here
+            first = start + FOXY_CLOCK_MARGIN          # picture certainly showing from here ...
+            last = min(end, tick) - FOXY_CLOCK_MARGIN  # ... until here
             if last - first < 0.0:
                 continue
             last_relock = math.floor(last * 10 + 1e-9) / 10   # latest 0.1 s instant <= last
-            if last_relock >= first and tick - last_relock <= 0.833 - CLOCK_MARGIN:
+            if last_relock >= first and tick - last_relock <= 0.833 - FOXY_CLOCK_MARGIN:
                 return True
         return False
 
@@ -382,7 +406,7 @@ class Brain:
     def _latest_light_start(self, watch: DoorWatch, now: float) -> float:
         """Latest moment a light check may start: before their next tick, and
         early enough not to delay the next flip / door click."""
-        deadline = rules.next_tick(watch.tick, now) - CHECK_DEADLINE_LEAD
+        deadline = self._tick_after(watch, now) - CHECK_DEADLINE_LEAD
         free_until = self._next_commitment(now) - LIGHT_CHECK_SECONDS - BUTTON_COOLDOWN - 0.1
         return max(now, min(deadline, free_until)) if free_until > now else deadline
 
@@ -421,7 +445,7 @@ class Brain:
         if self.foxy_max_stage >= 3 and not self.foxy_emergency and now >= self.foxy_alert_retry_at:
             for watch in (self.left, self.right):
                 if (self._door_check_needed(watch)
-                        and rules.next_tick(watch.tick, now) - CHECK_DEADLINE_LEAD < now + FOXY_ALERT_SECONDS):
+                        and self._tick_after(watch, now) - CHECK_DEADLINE_LEAD < now + FOXY_ALERT_SECONDS):
                     return lambda w=watch: self._check_doorway(w)
             return self._foxy_alert
 
@@ -433,7 +457,7 @@ class Brain:
         checks = []
         for watch in (self.left, self.right):
             if self._door_check_needed(watch):
-                deadline = rules.next_tick(watch.tick, now) - CHECK_DEADLINE_LEAD
+                deadline = self._tick_after(watch, now) - CHECK_DEADLINE_LEAD
                 estimate = self._pan_time(watch.side) + LIGHT_CHECK_SECONDS + 0.25
                 checks.append((deadline, estimate, watch))
         for deadline, estimate, watch in sorted(checks, key=lambda c: c[0]):
@@ -466,10 +490,25 @@ class Brain:
         # 5) Peeks, only when they fit before everything precise.
         for watch in (self.left, self.right):
             if self._peek_needed(watch, now):
-                estimate = self._pan_time(watch.side) + rules.DOOR_OPEN_SECONDS + LIGHT_CHECK_SECONDS + 0.6
+                estimate = self._peek_estimate(watch)
                 if now + estimate <= min(self._next_commitment(now), next_hard) and self._peek_fits(watch, now):
                     return lambda w=watch: self._peek(w)
+                # No time to look before the next flip or click: reopen the
+                # door anyway and plan to shut it again just before their
+                # next tick. Whether they are still there or not, the door
+                # is shut when it matters, and it is open (free) meanwhile.
+                quick = self._pan_time(watch.side) + 0.3
+                if now + quick <= min(self._next_commitment(now), next_hard):
+                    return lambda w=watch: self._reopen_blind(w)
         return None
+
+    def _peek_estimate(self, watch: DoorWatch) -> float:
+        """How long a peek keeps the bot busy, generously: pan over, wait for
+        the door to finish moving, open it, pick a quiet moment, flash the
+        light, and possibly shut the door again. (An optimistic estimate
+        once let a peek run into the other door's just-in-time click.)"""
+        return (self._pan_time(watch.side) + rules.DOOR_OPEN_SECONDS + LIGHT_CHECK_SECONDS
+                + 2 * BUTTON_COOLDOWN + 0.5)
 
     def _peek_fits(self, watch: DoorWatch, now: float) -> bool:
         """A peek opens the door, so it must finish (including shutting it
@@ -477,7 +516,7 @@ class Brain:
         that is still OPENING at their tick lets them in once it is open."""
         needed = (self._pan_time(watch.side) + rules.DOOR_OPEN_SECONDS + CLOCK_MARGIN
                   + LIGHT_CHECK_SECONDS + BUTTON_COOLDOWN + JIT_MIN_LEAD + 0.3)
-        return now + needed < rules.next_tick(watch.tick, now)
+        return now + needed < self._tick_after(watch, now)
 
     def _idle(self, now: float) -> None:
         """Nothing urgent: get into position for the next job, then wait."""
@@ -490,7 +529,7 @@ class Brain:
             target = min(planned, key=lambda w: w.close_at).side
         else:
             # Face the side whose check comes next, so the check itself is quick.
-            upcoming = min((self.left, self.right), key=lambda w: rules.next_tick(w.tick, now))
+            upcoming = min((self.left, self.right), key=lambda w: self._tick_after(w, now))
             target = upcoming.side if (upcoming.min_moves <= 1 or upcoming.at_door) else None
         if target and (freeze_start is None or freeze_start - now > PAN_SECONDS + 0.1):
             self.body.face(target)
@@ -522,7 +561,7 @@ class Brain:
             # about to happen: shutting the door is always safe.
             watch.failed_checks += 1
             self.say(f"{name}: light did not come on - retrying", alert=True)
-            tick_imminent = rules.next_tick(watch.tick, self.body.now()) - self.body.now() < LIGHT_FAIL_SHUT_LEAD
+            tick_imminent = self._tick_after(watch, self.body.now()) - self.body.now() < LIGHT_FAIL_SHUT_LEAD
             if (watch.failed_checks >= 3 or tick_imminent) and not watch.door_closed:
                 self._close_door(watch, reason="cannot see the doorway", after=self.body.now())
                 watch.at_door = True
@@ -568,7 +607,7 @@ class Brain:
         watch.close_at = close_at
         self.say(f"{watch.who.upper()} AT {watch.side.upper()} DOOR - closing at "
                  f"{close_at:.2f}s, before their move at "
-                 f"{rules.next_tick(watch.tick, self.body.now()):.2f}s", alert=True)
+                 f"{self._tick_after(watch, self.body.now()):.2f}s", alert=True)
 
     def _close_door(self, watch: DoorWatch, reason: str, after: float) -> None:
         watch.close_at = None
@@ -591,7 +630,7 @@ class Brain:
         door is not caught by a whole-second power charge.
         """
         now = self.body.now()
-        tick = rules.next_tick(watch.tick, now)
+        tick = self._tick_after(watch, now)
         latest = tick - JIT_MIN_LEAD
         earliest = now + 2 * BUTTON_COOLDOWN + 0.1   # light-off click comes first
         if latest - earliest < JIT_MIN_SLACK:
@@ -639,13 +678,38 @@ class Brain:
             log.warning("Late door click for %s (%.3f s before the tick)", watch.who, tick - self.body.now())
         self._close_door(watch, reason="just in time", after=self.body.now() - BUTTON_COOLDOWN)
 
+    def _reopen_blind(self, watch: DoorWatch) -> None:
+        """After their tick, when a peek does not fit: open the door now and
+        plan the just-in-time click that shuts it again before their next
+        tick. They are treated as possibly still there until a peek can
+        look. A door that is open between two ticks costs nothing; one that
+        stays shut for a whole tick costs ~0.5 % - so this saves power
+        whenever the schedule is crowded (4/20 nights especially)."""
+        name = watch.who.capitalize()
+        self.body.face(watch.side)
+        self.body.wait_until(max(self.body.now(), watch.moving_until))
+        close_at = self._plan_close(watch)
+        if close_at is None:
+            # Their next tick is too close: leave the door shut and let a
+            # little time pass (otherwise this would be chosen again at once).
+            self.body.wait_until(self.body.now() + 0.25)
+            return
+        self._press_door(watch)
+        watch.close_at = close_at
+        watch.checked_since_tick = True     # nothing to learn until their next tick
+        self.say(f"{name} may still be there - door open until {close_at:.2f}s, then shut again")
+
     def _peek(self, watch: DoorWatch) -> None:
         """After their tick: reopen, look, close again if they are still there."""
         name = watch.who.capitalize()
         self.body.face(watch.side)
         self.body.wait_until(max(self.body.now(), watch.moving_until))
-        if not self._peek_fits(watch, self.body.now()):
+        now = self.body.now()
+        if not self._peek_fits(watch, now):
             return  # too close to their next tick now; peek after it instead
+        other = self.right if watch is self.left else self.left
+        if other.close_at is not None and now + self._peek_estimate(watch) > self._jit_due(other):
+            return  # the other door's planned click comes first
         self.say(f"Checking whether {name} left (peek)")
         self._press_door(watch)
         door_open = watch.moving_until
@@ -778,10 +842,16 @@ class Brain:
             # (the lock lasts at least 0.833 s), so if the camera went up
             # early - for a cove check that 4B then forbade - stay up until
             # a re-lock instant that still protects the tick.
-            first_relock = math.floor((self._view_started + CLOCK_MARGIN) * 10 + 1) / 10
+            # The game only counts the picture as "viewing" once its flip-up
+            # animation has finished, and the clock may be off by a few
+            # hundredths, so the picture is held for a full
+            # FREEZE_VIEW_SECONDS at the very least (a hold of ~0.1 s once
+            # let Foxy reach stage 3 unseen - docs/DEVLOG.md).
+            first_relock = math.floor((self._view_started + FOXY_CLOCK_MARGIN) * 10 + 1) / 10
             min_lock = rules.FOXY_LOCK_MIN_FRAMES * rules.FRAME
-            covering_relock = math.ceil((tick - (min_lock - CLOCK_MARGIN)) * 10 - 1e-9) / 10
-            self.body.wait_until(max(self.body.now(), first_relock, covering_relock) + CLOCK_MARGIN)
+            covering_relock = math.ceil((tick - (min_lock - FOXY_CLOCK_MARGIN)) * 10 - 1e-9) / 10
+            self.body.wait_until(max(self.body.now(), self._view_started + FREEZE_VIEW_SECONDS,
+                                     max(first_relock, covering_relock) + FOXY_CLOCK_MARGIN))
         self._lower_camera()
         if stage is not None:
             self._after_cove_check(stage)
@@ -791,13 +861,15 @@ class Brain:
         Foxy may have moved since we last saw him (an uncovered tick), or it
         has been a while. A Foxy who was SEEN at stage 2 and whose every tick
         since was covered is still at stage 2 - no need to keep looking."""
-        must = self.foxy_max_stage > self.foxy_stage
-        overdue = self.body.now() - self.foxy_verified_at > FOXY_VERIFY_EVERY
-        # A routine re-check needs 4B clear first (Freddy's rule). While
-        # somebody was just seen on 4B it would only make every flip long -
-        # and a long flip usually spans a power charge - for nothing.
+        wanted = (self.foxy_max_stage > self.foxy_stage
+                  or self.body.now() - self.foxy_verified_at > FOXY_VERIFY_EVERY)
+        # A cove check needs 4B clear first (Freddy's rule). While somebody
+        # was just seen on 4B, planning one would only make every flip long
+        # - and a long flip usually spans a power charge - for nothing: the
+        # plain flip keeps Foxy frozen just as well, and if his possible
+        # stage reaches 3 the alert procedure shuts the right door and looks.
         four_b_blocked = self.body.now() - self.four_b_busy_at < FOUR_B_BUSY_SECONDS
-        return must or (overdue and not four_b_blocked)
+        return wanted and not four_b_blocked
 
     def _foxy_alert(self) -> None:
         """Foxy may have left the cove (some of his ticks were not covered).
