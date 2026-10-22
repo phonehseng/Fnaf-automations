@@ -548,3 +548,42 @@ Result, 100 fresh simulated nights each (wandering clock on):
 | 20/20/20/20 | 5-8/30, ~3 % | 99/100, 13.3 % |
 
 No break-ins in 700 nights; the three losses are the battery.
+
+### Live, 13:35 - 13:50: 6th Night WON, 20/20/20/20 lost at 307 s
+
+**6th Night: won, 6 AM at 0 %.** First live win of the 6th Night, but the
+simulator had promised ~13 %. The difference: 19 of 106 Foxy flips did not
+cover his tick (11 alerts, each shutting doors). The flips started up to
+0.8 s late, every time right after "door closed (before camera flip)":
+when a planned door click would collide with a flip, the bot shut that
+door first - but only started doing so at the flip's own start time, so
+the pan and the click cooldown came out of the flip. It now starts early
+enough to finish before the flip (and wakes up in time to decide), and an
+overdue flip is costed from *now*, not from its planned start (a late
+cove-check flip once ran 0.8 s into a planned door click that way).
+
+**20/20/20/20: lost at 307 s with 48 % power.** Chica's just-in-time
+click landed 0.31 s before her *assumed* tick, and the monitor would not
+come up right after - she was in. The assumed tick came from the phases
+measured this morning (Bonnie 0.5 s, Chica 0.6 s), and those were
+measured wrong in one direction: `measure_ticks.py` timestamped the camera
+READING that saw the room change, up to ~0.25 s after the move. So they
+are upper bounds. The brain now assumes the earliest plausible phase
+(Bonnie 0.15 s, Chica 0.35 s) and keeps the 0.4 s "tick settle" for the
+other side, and the simulator now tells the brain slightly wrong phases
+(up to +-0.15 s) on purpose - it found one more late-click path at once
+(the late cove-check flip above).
+
+**200-night 4/20 batch with the wrong phases: 5 break-ins.** Two more
+holes in the AI-20 "certainly sent back" proof, both found by the
+simulator:
+
+* The game has a single "who is moving" slot (`move who?` in the
+  decompiled events). A move waiting for a still-closing door can be
+  overwritten by the other animatronic's tick - then Bonnie simply stays
+  at the door. The proof now needs the door FULLY closed at his tick.
+* Moves since a repel are now counted from when he was last SEEN at the
+  door, not from the latest door closing (an earlier, unproven tick may
+  already have sent him back).
+
+After both: 4/20 195/200 (5 batteries, no break-ins), nights 2-6 500/500.

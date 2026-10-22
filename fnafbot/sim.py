@@ -393,6 +393,8 @@ LAMP_READ_SECONDS = 0.015       # one screenshot, one small patch (door button l
 # few hundredths of a second. The simulated body's clock wanders the same
 # way, so timing that only works with a perfect clock fails here too.
 CLOCK_ERROR_SECONDS = 0.07
+# How wrong the brain's idea of each movement timer's phase may be.
+PHASE_ERROR_SECONDS = 0.15
 CAMERA_SETTLE_SECONDS = 0.12  # static burst after raising/switching (body.CAMERA_SETTLE default)
 COVE_SETTLE_SECONDS = 0.3     # Pirate Cove waits longer (body.CAMERA_SETTLE["1C"])
 CAMERA_READ_SECONDS = 0.08    # 2-3 frames grabbed and classified
@@ -412,9 +414,13 @@ class SimBody:
         rng = random.Random(f"clock-{getattr(sim, 'seed', 0)}")
         self._phase = (rng.uniform(0, 2 * math.pi), rng.uniform(0, 2 * math.pi))
         self._error = clock_error
-        # In the simulator every timer runs on the same frame clock.
+        # In the simulator every timer runs on the same frame clock (phase
+        # 0), but the brain is told slightly WRONG phases, like on the real
+        # game where they are only known to within ~0.25 s: timing that only
+        # works with exact phases fails here first.
         self.scale = 1.0
-        self.tick_phases: dict[str, float] = {}
+        self.tick_phases = {who: rng.uniform(-PHASE_ERROR_SECONDS, PHASE_ERROR_SECONDS)
+                            for who in ("bonnie", "chica", "foxy")}
         self.camera_up_seconds = rules.CAMERA_UP_SECONDS
 
     # -- time

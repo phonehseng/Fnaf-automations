@@ -364,10 +364,13 @@ class Brain:
                     # keep shutting the door "in case they are still there"
                     # - on 4/20 nights that saves a door cycle (and two pans)
                     # every visit.
-                    # They may have been sent back at ANY tick since the door
-                    # shut (an earlier one only lacked proof), and moved on
-                    # one room per tick since: count from the earliest.
-                    since = self._tick_times(watch.who, watch.closed_at - CLOCK_MARGIN, tick + 1e-6)
+                    # They may have been sent back at ANY tick since they were
+                    # last SEEN at the door (an earlier tick only lacked proof:
+                    # a door still closing at it, or reopened and shut again
+                    # since), and moved on one room per tick: count from the
+                    # earliest. (Counting from the latest door closing let
+                    # Bonnie in on simulated 4/20 nights.)
+                    since = self._tick_times(watch.who, watch.seen_at_door_at, tick + 1e-6)
                     watch.at_door = False
                     watch.checked_since_tick = True
                     watch.min_moves = max(0, watch.distance[watch.repelled_to] - max(0, len(since) - 1))
@@ -383,11 +386,14 @@ class Brain:
 
     def _certainly_repelled(self, watch: DoorWatch, tick: float) -> bool:
         """Was someone who was SEEN at the door certainly sent back at
-        ``tick``? Only when their move cannot fail (AI 20) and the door
-        click was made before the tick (a door still closing makes the move
-        wait for it, so it counts)."""
+        ``tick``? Only when their move cannot fail (AI 20) and the door was
+        FULLY closed at the tick. A door still closing makes the move wait -
+        but the game has a single "who is moving" slot, and the other
+        animatronic's tick can overwrite the waiting move: then they simply
+        stay at the door. (Assuming otherwise let Bonnie in on 5 of 200
+        simulated 4/20 nights.)"""
         return (self.ai(tick)[watch.who] >= 20 and watch.seen_for_sure and watch.door_closed
-                and watch.closed_at <= tick - CLOCK_MARGIN)
+                and watch.closed_at <= tick - rules.DOOR_CLOSE_SECONDS - CLOCK_MARGIN)
 
     def _foxy_tick_covered(self, tick: float) -> bool:
         """Was Foxy's lock certainly running at this tick?
@@ -610,7 +616,8 @@ class Brain:
                 # closing click - see _look_while_open.
                 if SEEN_THROUGH_SHUT_DOOR[watch.side]:
                     continue
-                quick = self._pan_time(watch.side) + 0.3
+                # (it first waits for the door to finish closing, if it is)
+                quick = max(self._pan_time(watch.side), watch.moving_until - now) + 0.3
                 if nothing_late(quick) or (now + quick <= min(self._next_commitment(now) + REOPEN_FLIP_SLACK, next_hard)
                                            and all(now + quick + 1.5 < self._tick_after(w, now) for w in checks_needed)):
                     return lambda w=watch: self._reopen_blind(w)
@@ -669,11 +676,16 @@ class Brain:
             # Otherwise do the flip first; the check fits afterwards.
 
         # 4) The Foxy flip.
-        if freeze_start is not None and now >= freeze_start - 0.005:
-            if freeze_end + 0.05 > next_hard:
-                # The flip would run into a planned door click: shut that door
-                # now (costs a little power) and keep Foxy frozen.
+        if freeze_start is not None and hard and freeze_end + 0.05 > next_hard:
+            # The flip would run into a planned door click: shut that door
+            # first (costs a little power) and keep Foxy frozen. Started
+            # early enough for the pan and the click cooldown to fit BEFORE
+            # the flip - started at the flip time, it made flips 0.8 s late
+            # on the live game, and late flips do not cover Foxy's tick.
+            lead = self._pan_time(hard[0][1].side) + BUTTON_COOLDOWN + 0.15
+            if now >= freeze_start - lead:
                 return shut_planned_door_now("before camera flip")
+        if freeze_start is not None and now >= freeze_start - 0.005:
             return self._freeze_foxy
 
         # 5) Nothing else to do (peeks and reopens were considered in 2b).
@@ -706,9 +718,15 @@ class Brain:
         """Nothing urgent: get into position for the next job, then wait."""
         wake = now + 0.25
         freeze_start = self._next_freeze_start(now)
+        planned = [w for w in (self.left, self.right) if w.close_at is not None]
         if freeze_start is not None:
             wake = min(wake, freeze_start)
-        planned = [w for w in (self.left, self.right) if w.close_at is not None]
+            if planned:
+                # A planned click may have to be done before the flip (see
+                # _choose_job, step 4): wake in time for that decision.
+                early = freeze_start - (PAN_SECONDS + BUTTON_COOLDOWN + 0.15)
+                if early > now:
+                    wake = min(wake, early)
         if planned:
             target = min(planned, key=lambda w: w.close_at).side
         else:
@@ -728,7 +746,11 @@ class Brain:
         # plain hold (4B read, switch, settle, cove read, switch back). The
         # plain figure once let such a flip overrun a planned door click.
         view = COVE_CHECK_VIEW_SECONDS + 0.3 if self._cove_check_due() else FREEZE_VIEW_SECONDS
-        return start, start + self.body.camera_up_seconds + view + rules.CAMERA_DOWN_SECONDS
+        # An overdue flip starts NOW, not at its planned time: costing it
+        # from the planned time once let a late cove-check flip run 0.8 s
+        # into a planned door click.
+        actual_start = max(start, now)
+        return start, actual_start + self.body.camera_up_seconds + view + rules.CAMERA_DOWN_SECONDS
 
     # ------------------------------------------------------------------
     # Doorways
