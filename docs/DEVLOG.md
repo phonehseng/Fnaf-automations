@@ -919,3 +919,26 @@ planned counted his ticks as uncovered (stage 3 possible by 119 s), and
 four alerts shut the left door and looked at the cove (it showed him at
 stage 1 at 141.7 s - he really was advancing). Also seen: the power-clock
 fit jumped by +1.46 s at 372 s.
+
+**After #10 (the user watching it: "the bot kept leaving the door closed
+and closing it with no info or light switches").** Exactly what the log
+shows: with no lag sample, the "has his tick certainly happened" wait was
+~1.4 s, so a peek almost never fitted, and the blind reopens opened ~1 s
+before their closing click - open, shut, open, shut, light never on. Fixes:
+
+* A blind reopen now needs the door to stay open at least 2 s
+  (`BLIND_MIN_OPEN`), long enough to flash the light through it before the
+  closing click - so it learns whether he has gone. (Turning blind reopens
+  off altogether cost far too much power: 6/30 simulated 4/20 nights.)
+* With no sample after 90 s the lag is assumed to have settled between
+  0.45 and 1.0 s (where the cold starts settled), instead of "anything
+  from 0 to 0.95". The first real sample replaces that, even downwards.
+* A departure watch where the lamp stays lit is no longer read as "still
+  at the door": if his tick came after the window he may have gone unseen.
+  In the simulator that conclusion chained over five watches on a Bonnie
+  who had long gone, then his ARRIVAL back was read as him leaving and the
+  door was opened for him. A lit lamp now concludes nothing; a peek does.
+
+Simulator (40 nights each, nobody got in on any of them): 4/20 30/40
+(5.9 % left), 6th Night 36/40 (6.7 %), Night 5 36/40 (10.1 %); every loss
+a power-out.

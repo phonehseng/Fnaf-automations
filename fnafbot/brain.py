@@ -136,6 +136,15 @@ LAG_PRIOR = 0.15
 LAG_PRIOR_GROWTH = 0.012
 LAG_PRIOR_QUIET = 20.0
 LAG_SPREAD_MAX = 0.95
+# After the first minute and a half with no sample yet, assume the lag has
+# settled where the cold starts all settled (0.55 - 0.62, 0.78 - 0.85, and
+# ~0.6 on live 4/20 #8): between these two values. Allowing anything from
+# 0 to 0.95 s made the "has their tick happened yet" wait 1.4 s long, and a
+# peek through Bonnie's door almost never fitted (live #10). The floor errs
+# low (door clicks come early, the safe side); a sample replaces both.
+LAG_SETTLED_AFTER = 90.0
+LAG_SETTLED_LO = 0.45
+LAG_SETTLED_HI = 1.0
 # The lamp is read this long after it really goes dark (one screen grab).
 LAMP_SEEN_DELAY = 0.02
 # A departure watch (see _watch_leave) has the light on and confirmed lit
@@ -229,6 +238,15 @@ STUCK_PEEK_SECONDS = 4.0
 # (flips are planned 0.4 s before the latest safe moment, and _hold_until
 # keeps the picture up until the tick is covered anyway).
 REOPEN_FLIP_SLACK = 0.0
+# Blind reopens (open the door after their tick, shut it again before the
+# next) only when the door can stay open at least BLIND_MIN_OPEN seconds -
+# enough for the light to be flashed through it before the closing click
+# (_look_while_open), so the bot learns whether he has gone. On live 4/20
+# #10 they opened ~1 s before the closing click: open-shut-open-shut with
+# no light ever switched on and nothing learned. (Turning them off
+# altogether cost far more power in the simulator: 6/30 4/20 nights.)
+BLIND_REOPENS = True
+BLIND_MIN_OPEN = 2.0
 
 
 class Body(Protocol):
@@ -413,6 +431,8 @@ class Brain:
         """How much later than the tick model a tick at night time ``at``
         may come (see LAG_NOISE)."""
         if not self.lag_samples:
+            if at >= LAG_SETTLED_AFTER:
+                return max(0.0, LAG_SETTLED_HI - self.lag_lo)
             return min(LAG_SPREAD_MAX, LAG_PRIOR + LAG_PRIOR_GROWTH * max(0.0, at - LAG_PRIOR_QUIET))
         recent = [self.lag_samples[-1][2]]       # the latest sample's upper end
         last = self.lag_samples[-1][0]
@@ -431,6 +451,19 @@ class Brain:
         of power); a missed tick moves Foxy one stage at most, which the
         bot's stage-3 alert is there for."""
         return min(self._lag_spread(tick), FOXY_LAG_CAP)
+
+    def _raise_lag_floor(self, new_lo: float, allow_lower: bool = False) -> None:
+        """The timers are at least ``new_lo`` late (it never shrinks).
+        Every tick moves later by the difference; ticks already counted as
+        passed must not be counted again when they "move" past the
+        bookkeeping marks."""
+        if new_lo == self.lag_lo or (new_lo < self.lag_lo and not allow_lower):
+            return
+        shift = self.body.real_to_game(new_lo) - self.body.real_to_game(self.lag_lo)
+        for watch in (self.left, self.right):
+            watch.last_tick_seen += shift
+        self.foxy_last_tick_seen += shift
+        self.lag_lo = new_lo
 
     def _note_lag(self, whos: tuple[str, ...], seen_at: float) -> float | None:
         """A tick of one of ``whos`` was seen at night time ``seen_at`` (the
@@ -453,16 +486,13 @@ class Brain:
             return None
         lag, high = min(lags), max(lags)
         self.lag_samples.append((seen_at, lag, high))
-        new_lo = max(self.lag_lo, lag - LAG_NOISE)
-        if new_lo > self.lag_lo:
-            # Every tick moves later by the difference. Ticks already counted
-            # as passed must not be counted again when they "move" past the
-            # bookkeeping marks.
-            shift = self.body.real_to_game(new_lo) - self.body.real_to_game(self.lag_lo)
-            for watch in (self.left, self.right):
-                watch.last_tick_seen += shift
-            self.foxy_last_tick_seen += shift
-            self.lag_lo = new_lo
+        if len(self.lag_samples) == 1:
+            # The first sample replaces the assumed floor (LAG_SETTLED_LO),
+            # even downwards. (Moving the bookkeeping marks back can only
+            # count a tick twice - one extra check, never a missed one.)
+            self._raise_lag_floor(lag - LAG_NOISE, allow_lower=True)
+        else:
+            self._raise_lag_floor(lag - LAG_NOISE)
         log.info("%.2fs  timers run %.2f..%.2f s late (%s) - model now +%.2f .. +%.2f s",
                  seen_at, lag, high, "/".join(whos), self.lag_lo, self.lag_lo + self._lag_spread(seen_at))
         return lag
@@ -516,6 +546,8 @@ class Brain:
     # ------------------------------------------------------------------
 
     def _account_for_ticks(self, now: float) -> None:
+        if not self.lag_samples and now >= LAG_SETTLED_AFTER:
+            self._raise_lag_floor(LAG_SETTLED_LO)      # see LAG_SETTLED_AFTER
         # A tick only counts as passed once the clock is certainly past it;
         # otherwise a doorway check could run just BEFORE the real tick and
         # report "empty" about a doorway they are about to step into.
@@ -836,7 +868,7 @@ class Brain:
                 # door is never reopened blind.) An unseen Bonnie's door is
                 # reopened blind and then LOOKED through before the planned
                 # closing click - see _look_while_open.
-                if SEEN_THROUGH_SHUT_DOOR[watch.side]:
+                if SEEN_THROUGH_SHUT_DOOR[watch.side] or not BLIND_REOPENS:
                     continue
                 # (it first waits for the door to finish closing, if it is)
                 quick = max(self._pan_time(watch.side), watch.moving_until - now) + 0.3
@@ -1356,15 +1388,17 @@ class Brain:
             log.info("%.2fs  no change before the Foxy flip - %s's tick not seen", self.body.now(), watch.who)
             return
         if dark_at is None:
-            # Lit all through the tick: they did not move.
+            # Lit all through the window: no change seen. That is NOT a
+            # sighting - if their tick came after the window (a lag larger
+            # than allowed for), they may have gone unseen. So nothing is
+            # concluded and a peek settles it. (Counting it as "still at
+            # the door" let the simulator chain five such watches on a
+            # Bonnie who had long gone, then read his ARRIVAL back as him
+            # leaving and open the door.)
             self.body.wait_until(max(self.body.now(), self.last_press_at + BUTTON_COOLDOWN))
             if self.body.light_is_on(watch.side):
                 self._press("light", watch.side)
-            watch.watched_tick = tick
-            watch.watch_skips = 0
-            watch.checked_since_tick = True
-            watch.seen_at_door_at = self.body.now()
-            self.say(f"{name} is still at the door (did not move)")
+            self.say(f"{name}: no change across their tick - a peek will tell")
             return
         other_tick = self._other_may_have_moved(watch, dark_at)
         if other_tick is not None:
@@ -1424,7 +1458,8 @@ class Brain:
         # is exactly what the reopen saves. (A fixed minimum window used to
         # decide this; it refused reopens that would have saved a charge,
         # and the door stayed shut for the whole next cycle - five charges.)
-        if close_at is None or self._open_charges_saved(open_done, close_at) < 1:
+        if (close_at is None or self._open_charges_saved(open_done, close_at) < 1
+                or close_at - open_done < BLIND_MIN_OPEN):
             watch.reopen_after = self._tick_after(watch, now) + TICK_SETTLE + self._lag_spread(now)
             return
         self._press_door(watch)
