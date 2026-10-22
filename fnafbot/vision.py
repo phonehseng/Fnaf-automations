@@ -337,7 +337,8 @@ class Vision:
             scores = cv2.matchTemplate(ref[y0:y1], strip, cv2.TM_CCOEFF_NORMED)
             if scores.max() > best_score:
                 best_score, best_offset = float(scores.max()), int(np.argmax(scores)) * SCALE
-        return best_offset
+        # 81 quarter-size positions x 4 can reach 324; the picture only pans 320.
+        return min(best_offset, 320)
 
     def _rank_candidates(self, live: np.ndarray, prepared: _CameraCandidates,
                          offset: int) -> tuple[str, int, float]:

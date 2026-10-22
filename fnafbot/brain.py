@@ -82,6 +82,16 @@ FREEZE_LATEST_GAP = 0.833 - 0.1 - CLOCK_MARGIN
 # Re-check Pirate Cove (only when it is safe) at least this often.
 FOXY_VERIFY_EVERY = 30.0
 
+# Just-in-time doors (see Brain._plan_close): shut the door shortly before
+# Bonnie's/Chica's next tick instead of the moment they are seen.
+JIT_DOORS = True
+# The door click must land at least this long before their tick. A closing
+# door already blocks them, so this only has to cover clock error (~0.03 s),
+# click delay (one frame) and a generous safety margin.
+JIT_MIN_LEAD = 0.3
+# Only plan a later close if at least this much time is left to choose from.
+JIT_MIN_SLACK = 0.6
+
 
 class Body(Protocol):
     """What the brain needs from the game (real or simulated)."""
@@ -93,8 +103,8 @@ class Body(Protocol):
     def press(self, kind: str, side: str) -> None: ...
     def look_doorway(self, side: str) -> tuple[bool, bool]: ...
     def light_is_on(self, side: str) -> bool: ...
-    def camera_up(self) -> None: ...
-    def camera_down(self) -> None: ...
+    def camera_up(self) -> bool: ...
+    def camera_down(self) -> bool: ...
     def select_camera(self, camera: str) -> None: ...
     def read_camera(self, camera: str) -> dict: ...
     def power(self) -> int: ...
@@ -118,6 +128,8 @@ class DoorWatch:
     failed_checks: int = 0         # light checks in a row where the light never came on
     seen_at_door_at: float = 0.0   # last time we actually SAW them in the doorway
     seen_for_sure: bool = True     # False if the door was shut "just in case"
+    close_at: float | None = None  # planned just-in-time door click (night seconds)
+    moving_until: float = 0.0      # the door's open/close animation ends at this time
 
 
 @dataclass
@@ -145,10 +157,21 @@ class Brain:
 
         self.camera_selected = "1A"        # the game starts on Show Stage
         self.freddy_at_4b: bool | None = None
+        self.last_press_at = -1.0          # last door/light click (for the click cooldown)
+
+        # Foxy. foxy_stage is what we last SAW; foxy_max_stage is the highest
+        # stage he could possibly have reached since then (each of his ticks
+        # not covered by a camera flip may have moved him one stage).
         self.foxy_stage = 0
+        self.foxy_max_stage = 0
         self.foxy_verified_at = -1e9
-        self.foxy_frozen_tick = 0.0        # last Foxy tick we have planned a freeze for
+        self.foxy_last_tick_seen = 0.0
+        self.foxy_frozen_tick = 0.0        # last Foxy tick we have planned a flip for
         self.foxy_emergency = False        # Foxy left the cove: left door must stay shut
+        self.foxy_door_hold = False        # left door shut until we have looked at the cove
+        self.foxy_alert_retry_at = 0.0     # earliest time for another Foxy alert attempt
+        self.view_intervals: list[tuple[float, float]] = []   # when a camera picture showed
+        self._view_started = 0.0           # when the current camera picture appeared
 
     # ------------------------------------------------------------------
     # Helpers
@@ -163,7 +186,8 @@ class Brain:
         self.status.notes = {
             "Bonnie": "AT DOOR" if self.left.at_door else f">= {self.left.min_moves} moves",
             "Chica": "AT DOOR" if self.right.at_door else f">= {self.right.min_moves} moves",
-            "Foxy": "LEFT COVE" if self.foxy_emergency else f"stage {self.foxy_stage}",
+            "Foxy": "LEFT COVE" if self.foxy_emergency else
+                    f"stage {self.foxy_stage}" + (f" (<= {self.foxy_max_stage})" if self.foxy_max_stage > self.foxy_stage else ""),
             "Freddy": {None: "?", True: "at 4B", False: "not at 4B"}[self.freddy_at_4b],
         }
         log.info("%.2fs  %s", self.body.now(), action)
@@ -244,6 +268,32 @@ class Brain:
                 watch.checked_since_tick = False
                 if not watch.at_door:
                     watch.min_moves = max(0, watch.min_moves - 1)
+        # Foxy: every tick of his that no camera flip covered may have moved him.
+        for tick in rules.tick_times(rules.FOXY_TICK, self.foxy_last_tick_seen + 1e-6, now + 1e-6):
+            self.foxy_last_tick_seen = tick
+            if self.ai(tick)["foxy"] > 0 and not self._foxy_tick_covered(tick) and self.foxy_max_stage < 3:
+                self.foxy_max_stage += 1
+                log.info("%.2fs  Foxy tick at %.2f s was not covered by a flip (could be stage %d)",
+                         now, tick, self.foxy_max_stage)
+
+    def _foxy_tick_covered(self, tick: float) -> bool:
+        """Was Foxy's lock certainly running at this tick?
+
+        While a camera picture shows, the game re-rolls the lock at every
+        whole 0.1 s of night time to at least 50 frames (0.833 s). So a tick
+        is covered only if such a 0.1 s instant certainly fell inside a
+        picture-showing interval BEFORE the tick, no more than 0.833 s
+        earlier. (A picture that appears a moment before the tick, but after
+        the last 0.1 s instant, does NOT protect it.)"""
+        for start, end in self.view_intervals[-4:]:
+            first = start + CLOCK_MARGIN          # picture certainly showing from here ...
+            last = min(end, tick) - CLOCK_MARGIN  # ... until here
+            if last - first < 0.0:
+                continue
+            last_relock = math.floor(last * 10 + 1e-9) / 10   # latest 0.1 s instant <= last
+            if last_relock >= first and tick - last_relock <= 0.833 - CLOCK_MARGIN:
+                return True
+        return False
 
     def _door_check_needed(self, watch: DoorWatch) -> bool:
         """A light check is needed if they could have arrived at the last tick."""
@@ -251,42 +301,133 @@ class Brain:
                 and not watch.door_closed)
 
     def _peek_needed(self, watch: DoorWatch, now: float) -> bool:
-        """They were at the closed door and one of their ticks has passed."""
+        """They were (or may be) at the closed door and one of their ticks has
+        passed, so they may have gone. Never during a Foxy door hold."""
+        if watch is self.left and (self.foxy_door_hold or self.foxy_emergency):
+            return False
         return (watch.at_door and watch.door_closed and not watch.checked_since_tick
-                and now >= watch.closed_at + rules.DOOR_CLOSE_SECONDS + CLOCK_MARGIN)
+                and now >= watch.moving_until)
 
     # ------------------------------------------------------------------
     # Choosing what to do next
     # ------------------------------------------------------------------
 
+    def _pan_time(self, side: str) -> float:
+        return 0.0 if getattr(self.body, "facing", None) == side else PAN_SECONDS
+
+    def _press(self, kind: str, side: str) -> None:
+        """Click a door/light button (the body waits out the click cooldown)."""
+        self.body.press(kind, side)
+        self.last_press_at = self.body.now()
+
+    def _press_door(self, watch: DoorWatch) -> None:
+        """Toggle a door. The game ignores door clicks while the door is still
+        moving, so first wait for its previous animation to finish; then
+        remember when this one will finish."""
+        self.body.face(watch.side)
+        self.body.wait_until(max(self.body.now(), watch.moving_until))
+        self._press("door", watch.side)
+        watch.door_closed = not watch.door_closed
+        duration = rules.DOOR_CLOSE_SECONDS if watch.door_closed else rules.DOOR_OPEN_SECONDS
+        watch.moving_until = self.body.now() + duration + CLOCK_MARGIN
+        if watch.door_closed:
+            watch.closed_at = self.body.now()
+            watch.close_at = None
+
+    def _next_commitment(self, now: float) -> float:
+        """The next moment the bot must be free for something precise: a
+        Foxy camera flip or a planned door click."""
+        times = [self._jit_due(w) for w in (self.left, self.right) if w.close_at is not None]
+        freeze = self._next_freeze_start(now)
+        if freeze is not None:
+            times.append(freeze)
+        return min(times) if times else math.inf
+
+    def _latest_light_start(self, watch: DoorWatch, now: float) -> float:
+        """Latest moment a light check may start: before their next tick, and
+        early enough not to delay the next flip / door click."""
+        deadline = rules.next_tick(watch.tick, now) - CHECK_DEADLINE_LEAD
+        free_until = self._next_commitment(now) - LIGHT_CHECK_SECONDS - BUTTON_COOLDOWN - 0.1
+        return max(now, min(deadline, free_until)) if free_until > now else deadline
+
+    def _jit_due(self, watch: DoorWatch) -> float:
+        """When we must START heading for a planned door click: time to pan,
+        plus a possible click cooldown, plus a safety margin."""
+        return watch.close_at - self._pan_time(watch.side) - BUTTON_COOLDOWN - 0.12
+
     def _choose_job(self, now: float):
-        """Return the most urgent action to do right now, or None to wait."""
-        # 1) Doorway work, most urgent deadline first.
-        door_jobs = []
-        for watch in (self.left, self.right):
-            next_tick = rules.next_tick(watch.tick, now)
-            if self._door_check_needed(watch):
-                door_jobs.append((next_tick - CHECK_DEADLINE_LEAD, lambda w=watch: self._check_doorway(w)))
-            elif self._peek_needed(watch, now):
-                door_jobs.append((next_tick - 1.4, lambda w=watch: self._peek(w)))
-        door_jobs.sort(key=lambda job: job[0])
+        """Return the most urgent action to do right now, or None to wait.
 
-        # 2) The Foxy freeze session (a precise-time job).
+        Priority order (a job only starts if it cannot make anything above
+        it late):
+          1. planned just-in-time door clicks       - safety, hard deadline
+          2. Foxy alert (he may have left the cove) - safety
+          3. light checks through an OPEN door      - safety, deadline = their next tick
+          4. the Foxy camera flip                   - keeps Foxy frozen
+          5. peeks through a door shut on someone   - only saves power (the
+             door is already protecting us), so it waits for a free moment
+        """
+        # 1) Just-in-time door clicks.
+        hard = sorted((self._jit_due(w), w) for w in (self.left, self.right) if w.close_at is not None)
+        for due, watch in hard:
+            if now >= due:
+                return lambda w=watch: self._jit_close(w)
+        next_hard = hard[0][0] if hard else math.inf
+
+        def shut_planned_door_now(reason: str):
+            _, urgent = hard[0]
+            return lambda w=urgent: self._close_door(w, reason=reason, after=self.body.now())
+
+        # 2) Foxy may have left the cove: shut the left door and go and look.
+        if self.foxy_max_stage >= 3 and not self.foxy_emergency and now >= self.foxy_alert_retry_at:
+            return self._foxy_alert
+
         freeze_start = self._next_freeze_start(now)
+        freeze_end = (freeze_start + rules.CAMERA_UP_SECONDS + FREEZE_VIEW_SECONDS + rules.CAMERA_DOWN_SECONDS
+                      if freeze_start is not None else None)
 
-        if door_jobs:
-            deadline, job = door_jobs[0]
-            if freeze_start is None:
+        # 3) Safety checks through open doors, most urgent first.
+        checks = []
+        for watch in (self.left, self.right):
+            if self._door_check_needed(watch):
+                deadline = rules.next_tick(watch.tick, now) - CHECK_DEADLINE_LEAD
+                estimate = self._pan_time(watch.side) + LIGHT_CHECK_SECONDS + 0.25
+                checks.append((deadline, estimate, watch))
+        for deadline, estimate, watch in sorted(checks, key=lambda c: c[0]):
+            job = lambda w=watch: self._check_doorway(w)
+            if now + estimate + BUTTON_COOLDOWN > next_hard:
+                if deadline > next_hard + 1.0:
+                    continue  # it can wait until after the planned door click
+                return shut_planned_door_now("schedule conflict")
+            if freeze_start is None or now + estimate <= freeze_start:
                 return job
-            # Do the door work now unless it would make us miss the freeze and
-            # can safely wait until after the freeze session.
-            door_job_end = now + PAN_SECONDS + LIGHT_CHECK_SECONDS + 0.3
-            freeze_end = freeze_start + rules.CAMERA_UP_SECONDS + FREEZE_VIEW_SECONDS + rules.CAMERA_DOWN_SECONDS
-            if door_job_end <= freeze_start or freeze_end + PAN_SECONDS + 0.3 > deadline:
-                return job
+            if freeze_end + PAN_SECONDS + estimate > deadline:
+                return job        # cannot wait for the flip: safety first
+            # Otherwise do the flip first; the check fits afterwards.
+
+        # 4) The Foxy flip.
         if freeze_start is not None and now >= freeze_start - 0.005:
+            if freeze_end + 0.05 > next_hard:
+                # The flip would run into a planned door click: shut that door
+                # now (costs a little power) and keep Foxy frozen.
+                return shut_planned_door_now("before camera flip")
             return self._freeze_foxy
+
+        # 5) Peeks, only when they fit before everything precise.
+        for watch in (self.left, self.right):
+            if self._peek_needed(watch, now):
+                estimate = self._pan_time(watch.side) + rules.DOOR_OPEN_SECONDS + LIGHT_CHECK_SECONDS + 0.6
+                if now + estimate <= min(self._next_commitment(now), next_hard) and self._peek_fits(watch, now):
+                    return lambda w=watch: self._peek(w)
         return None
+
+    def _peek_fits(self, watch: DoorWatch, now: float) -> bool:
+        """A peek opens the door, so it must finish (including shutting it
+        again if they are still there) well before their next tick: a door
+        that is still OPENING at their tick lets them in once it is open."""
+        needed = (self._pan_time(watch.side) + rules.DOOR_OPEN_SECONDS + CLOCK_MARGIN
+                  + LIGHT_CHECK_SECONDS + BUTTON_COOLDOWN + JIT_MIN_LEAD + 0.3)
+        return now + needed < rules.next_tick(watch.tick, now)
 
     def _idle(self, now: float) -> None:
         """Nothing urgent: get into position for the next job, then wait."""
@@ -294,11 +435,23 @@ class Brain:
         freeze_start = self._next_freeze_start(now)
         if freeze_start is not None:
             wake = min(wake, freeze_start)
-        # Face the side whose check comes next, so the check itself is quick.
-        upcoming = min((self.left, self.right), key=lambda w: rules.next_tick(w.tick, now))
-        if (upcoming.min_moves <= 1 or upcoming.at_door) and (freeze_start is None or freeze_start - now > PAN_SECONDS + 0.1):
-            self.body.face(upcoming.side)
+        planned = [w for w in (self.left, self.right) if w.close_at is not None]
+        if planned:
+            target = min(planned, key=lambda w: w.close_at).side
+        else:
+            # Face the side whose check comes next, so the check itself is quick.
+            upcoming = min((self.left, self.right), key=lambda w: rules.next_tick(w.tick, now))
+            target = upcoming.side if (upcoming.min_moves <= 1 or upcoming.at_door) else None
+        if target and (freeze_start is None or freeze_start - now > PAN_SECONDS + 0.1):
+            self.body.face(target)
         self.body.wait_until(max(self.body.now(), min(wake, self.body.now() + 0.25)))
+
+    def _freeze_window(self, now: float) -> tuple[float, float] | None:
+        """(camera raise starts, camera fully down) for the next Foxy flip."""
+        start = self._next_freeze_start(now)
+        if start is None:
+            return None
+        return start, start + rules.CAMERA_UP_SECONDS + FREEZE_VIEW_SECONDS + rules.CAMERA_DOWN_SECONDS
 
     # ------------------------------------------------------------------
     # Doorways
@@ -310,8 +463,7 @@ class Brain:
         self.say(f"Looking for {name} ({watch.side} light)")
         self.body.face(watch.side)
         now = self.body.now()
-        deadline = rules.next_tick(watch.tick, now) - CHECK_DEADLINE_LEAD
-        self.body.wait_until(self.quiet_light_start(now, deadline))
+        self.body.wait_until(self.quiet_light_start(now, self._latest_light_start(watch, now)))
         present, lit = self._flash_light(watch)
         if not lit:
             # The light did not come on (a click lost to timing). Try again,
@@ -336,36 +488,116 @@ class Brain:
             watch.min_moves = max(watch.min_moves, 1)
 
     def _flash_light(self, watch: DoorWatch) -> tuple[bool, bool]:
-        """Light on, look, (close door if needed), light off. Returns (present, lit)."""
+        """Light on, look, react, light off. Returns (present, lit)."""
         light_on_at = self.body.now()
-        self.body.press("light", watch.side)
+        self._press("light", watch.side)
         present, lit = self.body.look_doorway(watch.side)
         if present and not watch.door_closed:
-            self._close_door(watch, reason="seen in doorway", after=light_on_at)
+            self._react_to_sighting(watch, light_on_at)
         # Switch the light off once the click cooldown allows it.
         self.body.wait_until(max(self.body.now(), light_on_at + BUTTON_COOLDOWN))
         if self.body.light_is_on(watch.side):
-            self.body.press("light", watch.side)
+            self._press("light", watch.side)
         return present, lit
 
+    def _react_to_sighting(self, watch: DoorWatch, light_on_at: float) -> None:
+        """Bonnie/Chica is in the doorway with the door open.
+
+        They can only come in at their NEXT tick, so the door only has to be
+        shut by then. With just-in-time doors the bot schedules the click for
+        shortly before that tick (see _plan_close), which keeps the door from
+        costing power for ~4 s. If there is not enough slack to do that
+        safely, the door is shut right now.
+        """
+        close_at = self._plan_close(watch) if JIT_DOORS else None
+        if close_at is None:
+            self._close_door(watch, reason="seen in doorway", after=light_on_at)
+            return
+        watch.close_at = close_at
+        self.say(f"{watch.who.upper()} AT {watch.side.upper()} DOOR - closing at "
+                 f"{close_at:.2f}s, before their move at "
+                 f"{rules.next_tick(watch.tick, self.body.now()):.2f}s", alert=True)
+
     def _close_door(self, watch: DoorWatch, reason: str, after: float) -> None:
+        watch.close_at = None
+        if watch.door_closed:
+            return
         self.body.wait_until(max(self.body.now(), after + BUTTON_COOLDOWN))
-        self.body.press("door", watch.side)
-        watch.door_closed = True
-        watch.closed_at = self.body.now()
+        self._press_door(watch)
         self.say(f"{watch.who.upper()} AT {watch.side.upper()} DOOR - door closed ({reason})", alert=True)
+
+    # -- just-in-time doors ------------------------------------------------
+
+    def _plan_close(self, watch: DoorWatch) -> float | None:
+        """Pick when to shut the door before their next tick, or None to shut now.
+
+        Constraints (safety first):
+          * the click lands at least JIT_MIN_LEAD before their tick;
+          * it does not overlap the next Foxy camera session (with time to
+            pan back to this side afterwards) or another planned door click;
+        then, among the allowed moments, prefer one where the fully-closed
+        door is not caught by a whole-second power charge.
+        """
+        now = self.body.now()
+        tick = rules.next_tick(watch.tick, now)
+        latest = tick - JIT_MIN_LEAD
+        earliest = now + 2 * BUTTON_COOLDOWN + 0.1   # light-off click comes first
+        if latest - earliest < JIT_MIN_SLACK:
+            return None
+
+        busy: list[tuple[float, float]] = []
+        freeze = self._freeze_window(now)
+        if freeze:
+            busy.append((freeze[0] - 0.05, freeze[1] + PAN_SECONDS + 0.05))
+        for other in (self.left, self.right):
+            if other is not watch and other.close_at is not None:
+                busy.append((other.close_at - PAN_SECONDS - 0.1, other.close_at + PAN_SECONDS + 0.1))
+
+        best, best_cost = None, None
+        c = latest
+        while c >= earliest:
+            if not any(lo <= c <= hi for lo, hi in busy):
+                cost = self._closed_door_charges(c, tick)
+                if best_cost is None or cost < best_cost:
+                    best, best_cost = c, cost
+                    if cost == 0:
+                        break
+            c -= 0.02
+        return best
+
+    @staticmethod
+    def _closed_door_charges(close_click: float, tick: float) -> int:
+        """Whole seconds (power charges) while the door would count as closed:
+        from the end of its closing animation until the end of the reopening
+        animation (reopened right after the tick, see _peek)."""
+        closed_from = close_click + rules.DOOR_CLOSE_SECONDS - POWER_TICK_GUARD
+        reopen_click = max(tick + AFTER_TICK, close_click + rules.DOOR_CLOSE_SECONDS + CLOCK_MARGIN)
+        closed_until = reopen_click + rules.DOOR_OPEN_SECONDS + 0.1 + POWER_TICK_GUARD
+        return max(0, math.floor(closed_until) - math.ceil(closed_from) + 1)
+
+    def _jit_close(self, watch: DoorWatch) -> None:
+        """Shut the door at the planned moment (see _plan_close)."""
+        if watch.door_closed or watch.close_at is None:
+            watch.close_at = None
+            return
+        self.body.face(watch.side)
+        self.body.wait_until(watch.close_at)
+        tick = rules.next_tick(watch.tick, watch.close_at - 0.01)
+        if self.body.now() > tick - 0.1:
+            log.warning("Late door click for %s (%.3f s before the tick)", watch.who, tick - self.body.now())
+        self._close_door(watch, reason="just in time", after=self.body.now() - BUTTON_COOLDOWN)
 
     def _peek(self, watch: DoorWatch) -> None:
         """After their tick: reopen, look, close again if they are still there."""
         name = watch.who.capitalize()
-        self.say(f"Checking whether {name} left (peek)")
         self.body.face(watch.side)
-        opened_at = self.body.now()
-        self.body.press("door", watch.side)
-        watch.door_closed = False
-        door_open = opened_at + rules.DOOR_OPEN_SECONDS + CLOCK_MARGIN
-        deadline = rules.next_tick(watch.tick, door_open) - CHECK_DEADLINE_LEAD
-        self.body.wait_until(self.quiet_light_start(door_open, deadline))
+        self.body.wait_until(max(self.body.now(), watch.moving_until))
+        if not self._peek_fits(watch, self.body.now()):
+            return  # too close to their next tick now; peek after it instead
+        self.say(f"Checking whether {name} left (peek)")
+        self._press_door(watch)
+        door_open = watch.moving_until
+        self.body.wait_until(self.quiet_light_start(door_open, max(door_open, self._latest_light_start(watch, door_open))))
         present, lit = self._flash_light(watch)
         watch.checked_since_tick = True
         if not lit:
@@ -411,84 +643,185 @@ class Brain:
                 return view_start - rules.CAMERA_UP_SECONDS
         return tick - 0.25 - FREEZE_VIEW_SECONDS - rules.CAMERA_UP_SECONDS
 
+
+    # -- camera sessions ---------------------------------------------------
+
+    def _raise_camera(self) -> bool:
+        """Raise the monitor (it always comes up on the last camera viewed,
+        which the bot keeps on 4B). Returns False if it did not come up."""
+        if not self.body.camera_up():
+            self.say("Camera did not come up", alert=True)
+            self.body.camera_down()
+            return False
+        self._view_started = self.body.now()
+        if self.camera_selected != "4B":
+            # Only on the very first flip of the night (the game starts on
+            # Show Stage); Freddy is still on stage then, so this is safe.
+            self.body.select_camera("4B")
+            self.camera_selected = "4B"
+        return True
+
+    def _lower_camera(self) -> None:
+        """Lower the monitor, always leaving it set to 4B for next time."""
+        if self.camera_selected != "4B":
+            self.body.select_camera("4B")
+            self.camera_selected = "4B"
+        # Record when a picture was showing; Foxy's lock is judged from this.
+        self.view_intervals.append((self._view_started, self.body.now()))
+        self.view_intervals = self.view_intervals[-8:]
+        self.body.camera_down()
+
+    def _read_4b(self) -> bool:
+        """Read E. Hall Corner. True if it is certainly empty (Freddy cannot be
+        waiting there, so other cameras may be viewed this session)."""
+        view = self.body.read_camera("4B")
+        if not view["visible"]:
+            return False
+        self.freddy_at_4b = "F" in view["occupants"]
+        return not view["occupants"]
+
+    def _look_at_cove(self) -> int | None:
+        """View Pirate Cove (caller guarantees it is safe) and update Foxy.
+        Returns the stage seen, or None if the picture was unreadable."""
+        self.say("Checking Foxy (Pirate Cove)")
+        self.body.select_camera("1C")
+        self.camera_selected = "1C"
+        view = self.body.read_camera("1C")
+        self.body.select_camera("4B")
+        self.camera_selected = "4B"
+        if not view["visible"] or view["foxy_stage"] is None:
+            return None
+        self.foxy_stage = self.foxy_max_stage = view["foxy_stage"]
+        self.foxy_verified_at = self.body.now()
+        return self.foxy_stage
+
+    # -- Foxy ----------------------------------------------------------------
+
     def _freeze_foxy(self) -> None:
+        """Short camera flip just before Foxy's tick, so his lock is running."""
         now = self.body.now()
         tick = rules.next_tick(rules.FOXY_TICK, max(now, self.foxy_frozen_tick + 0.01))
         self.foxy_frozen_tick = tick
         self.say("Camera flip to hold Foxy (resting on 4B)")
-        self.body.camera_up()
-        view_start = self.body.now()
-        if self.camera_selected != "4B":
-            # Only happens on the very first flip of the night (the game starts
-            # on Show Stage). Freddy is still on stage then, so it is safe.
-            self.body.select_camera("4B")
-            self.camera_selected = "4B"
-        view = self.body.read_camera("4B")
-        if view["visible"]:
-            self.freddy_at_4b = "F" in view["occupants"]
-            clear = not view["occupants"]
-        else:
-            clear = False
-        if clear and self.body.now() - self.foxy_verified_at > FOXY_VERIFY_EVERY:
-            self._verify_foxy()
+        if not self._raise_camera():
+            return
+        stage = None
+        if self._read_4b():
+            due = self.body.now() - self.foxy_verified_at > FOXY_VERIFY_EVERY
+            if due or self.foxy_max_stage >= 2:
+                stage = self._look_at_cove()
         # Keep the picture up for the planned time, then lower it.
-        self.body.wait_until(max(self.body.now(), view_start + FREEZE_VIEW_SECONDS))
-        self.body.camera_down()
+        self.body.wait_until(max(self.body.now(), self._view_started + FREEZE_VIEW_SECONDS))
+        self._lower_camera()
+        if stage is not None:
+            self._after_cove_check(stage)
 
-    def _verify_foxy(self) -> None:
-        """Look at Pirate Cove (only called when 4B is confirmed empty)."""
-        self.say("Checking Foxy (Pirate Cove)")
-        self.body.select_camera("1C")
-        view = self.body.read_camera("1C")
-        self.body.select_camera("4B")   # always leave the camera resting on 4B
-        self.camera_selected = "4B"
-        if view["visible"] and view["foxy_stage"] is not None:
-            self.foxy_stage = view["foxy_stage"]
-            self.foxy_verified_at = self.body.now()
-            if self.foxy_stage >= 3:
-                self._foxy_emergency()
+    def _foxy_alert(self) -> None:
+        """Foxy may have left the cove (some of his ticks were not covered).
+
+        Shut the left door first (he can only come through it), then look at
+        the cove. If 4B is not clear, the right door is shut too before
+        looking, because Freddy can only get in through an OPEN right door
+        while a camera other than 4B is showing."""
+        self.say("Foxy might be out - left door shut until checked", alert=True)
+        self._close_planned_doors_now()
+        self.foxy_door_hold = True
+        self._shut(self.left, "Foxy might be out")
+        shut_right = False
+        if not self._raise_camera():
+            return
+        if not self._read_4b():
+            self._lower_camera()
+            shut_right = not self.right.door_closed
+            self._shut(self.right, "safe to look at Pirate Cove")
+            # The right door must be FULLY shut before another camera shows.
+            self.body.wait_until(max(self.body.now(), self.right.moving_until))
+            if not self._raise_camera():
+                return
+        stage = self._look_at_cove()
+        self._lower_camera()
+        if shut_right:
+            self._release(self.right)
+        if stage is None:
+            # Unreadable: keep the left door shut and try again in a moment
+            # (not immediately, so the doorway checks still get their turn).
+            self.foxy_max_stage = 3
+            self.foxy_alert_retry_at = self.body.now() + 2.0
+            return
+        self._after_cove_check(stage)
+
+    def _after_cove_check(self, stage: int) -> None:
+        if stage >= 3:
+            self._foxy_emergency()
+        elif self.foxy_door_hold:
+            self.foxy_door_hold = False
+            self._release(self.left)
+            self.say(f"Foxy is still in the cove (stage {stage})")
 
     def _foxy_emergency(self) -> None:
         """Foxy has left the cove: shut the left door and make him run now.
 
-        Viewing West Hall (2A) makes him run at once, so the left door only
-        has to stay shut for ~2 s instead of up to 25 s. 2A is not 4B, so
-        Freddy must be made safe first: the right door is shut too (with it
-        shut, viewing 2A sends a waiting Freddy back to East Hall).
+        Viewing West Hall (2A) makes him run at once (he arrives 100 frames
+        later), so the left door only stays shut for ~2 s instead of up to
+        25 s. 2A is not 4B, so the right door is shut first for Freddy.
         """
         self.foxy_emergency = True
         self.say("FOXY LEFT THE COVE - closing doors", alert=True)
-        self.body.camera_down()
+        self._close_planned_doors_now()
+        self._shut(self.left, "Foxy is coming")
         shut_right = not self.right.door_closed
-        for watch in (self.left, self.right) if shut_right else (self.left,):
-            if not watch.door_closed:
-                self.body.face(watch.side)
-                self.body.wait_until(self.body.now() + BUTTON_COOLDOWN)
-                self.body.press("door", watch.side)
-                watch.door_closed = True
-                watch.closed_at = self.body.now()
-        self.body.wait_until(self.body.now() + rules.DOOR_CLOSE_SECONDS + CLOCK_MARGIN)
+        self._shut(self.right, "safe to view West Hall")
+        # Both doors must be FULLY shut before a camera other than 4B shows.
+        self.body.wait_until(max(self.body.now(), self.left.moving_until, self.right.moving_until))
         self.say("Making Foxy run now (viewing West Hall)", alert=True)
-        self.body.camera_up()
-        self.body.select_camera("2A")
-        self.body.wait_until(self.body.now() + 0.15)
-        self.body.select_camera("4B")
-        self.camera_selected = "4B"
-        self.body.camera_down()
-        # He arrives 100 frames after the run starts and bangs on the door.
+        if self._raise_camera():
+            self.body.select_camera("2A")
+            self.camera_selected = "2A"
+            self.body.wait_until(self.body.now() + 0.15)
+            self._lower_camera()
+        # He bangs on the closed door 100 frames after starting to run.
         self.body.wait_until(self.body.now() + rules.FOXY_RUN_FRAMES * rules.FRAME + 0.6)
         self.foxy_emergency = False
-        self.foxy_stage = 0
-        self.foxy_verified_at = -1e9    # look at Pirate Cove again at the next safe moment
-        # Reopen the doors that were shut only because of Foxy, and look
-        # through them again before the next tick (someone may have arrived).
-        for watch in (self.right, self.left):
-            reopen = watch is self.left or shut_right
-            if reopen and watch.door_closed and not watch.at_door:
-                self.body.face(watch.side)
-                self.body.wait_until(self.body.now() + BUTTON_COOLDOWN)
-                self.body.press("door", watch.side)
-                watch.door_closed = False
-                watch.checked_since_tick = False
-                watch.min_moves = 0
+        self.foxy_door_hold = False
+        self.foxy_stage, self.foxy_max_stage = 0, 1      # he restarts at stage 0 or 1
+        self.foxy_verified_at = -1e9
+        if shut_right:
+            self._release(self.right)
+        self._release(self.left)
         self.say("Foxy hit the door - back to normal")
+
+    # -- door helpers used by the Foxy procedures ---------------------------------
+
+    def _close_planned_doors_now(self) -> None:
+        """Before a long procedure: do every planned just-in-time door click
+        right away, so the procedure can never make one of them late."""
+        for watch in (self.left, self.right):
+            if watch.close_at is not None and not watch.door_closed:
+                self._shut(watch, "before a long action")
+                watch.closed_at = self.body.now()
+
+    def _shut(self, watch: DoorWatch, reason: str) -> None:
+        """Shut a door for a Foxy/Freddy reason (if it is not shut already)."""
+        if watch.door_closed:
+            return
+        self._press_door(watch)
+        self.say(f"{watch.side} door closed ({reason})")
+
+    def _release(self, watch: DoorWatch) -> None:
+        """A door shut for Foxy/Freddy reasons is no longer needed for them.
+
+        Nobody looked through it meanwhile. If Bonnie/Chica provably cannot
+        be standing there (their distance bound is still >= 1), open it now.
+        Otherwise treat them as possibly there: the door stays shut and the
+        normal peek reopens it right after their next tick, which always
+        leaves a full ~4.5 s to look and react."""
+        if not watch.door_closed:
+            return
+        if not watch.at_door and watch.min_moves >= 1:
+            self._press_door(watch)
+            return
+        if not watch.at_door:
+            watch.at_door = True
+            watch.seen_for_sure = False
+            watch.checked_since_tick = True       # wait for their next tick
+            watch.seen_at_door_at = self.body.now()

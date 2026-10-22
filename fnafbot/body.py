@@ -185,6 +185,11 @@ class RealBody:
         deadline = time.perf_counter() + 0.15
         while time.perf_counter() < deadline:
             frame = self.ctl.window.grab()
+            if self.vision.current_camera(frame) is not None:
+                # The monitor is up, so this is not the office: never judge a
+                # doorway from a camera picture.
+                log.warning("look_doorway: the camera is showing, not the office")
+                return False, False
             if self._lit(frame, side):
                 present, margin = look(frame)
                 log.info("doorway %s: %s (margin %.1f)", side, "OCCUPIED" if present else "empty", margin)
@@ -200,12 +205,12 @@ class RealBody:
     # Camera
     # ------------------------------------------------------------------
 
-    def camera_up(self) -> None:
+    def camera_up(self) -> bool:
         self._check_stop()
-        self.ctl.camera_up()
+        return self.ctl.camera_up()
 
-    def camera_down(self) -> None:
-        self.ctl.camera_down()
+    def camera_down(self) -> bool:
+        return self.ctl.camera_down()
 
     def select_camera(self, camera: str) -> None:
         self._check_stop()

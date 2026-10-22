@@ -78,17 +78,22 @@ RIGHT_LIGHT_LAMP = Box(1207, 440, 1235, 510)
 # The camera monitor
 # ---------------------------------------------------------------------------
 
-# Hovering into this bar flips the monitor up (or back down). The game only
-# reacts when the cursor ENTERS the bar, so we swipe from above it to inside it.
+# Hovering the bar flips the monitor up (or back down). The game has two
+# invisible hover zones (positions read from the game's level data):
+#   * "flip down", centred at (589, 599): touching it RE-ARMS the flip;
+#   * "flip up", the bar itself: touching it (when armed) flips the monitor.
+# So every flip is: rest on the re-arm spot, then on the bar, each for at
+# least a couple of frames. Measured live: 32/32 flips worked this way, and
+# 0/32 when re-arming from (640, 560), which is outside the re-arm zone.
 CAMERA_BAR = Box(258, 648, 852, 690)
-# x = 640 is inside the pan dead zone, so swiping never moves the office view.
-CAMERA_BAR_ABOVE = (640, 560)   # start of the swipe (outside the bar)
-CAMERA_BAR_INSIDE = (640, 670)  # end of the swipe (inside the bar)
+CAMERA_REARM = (589, 599)       # inside "flip down"; also in the pan dead zone
+CAMERA_TRIGGER = (554, 668)     # centre of the visible bar
+CAMERA_HOVER_SECONDS = 0.04     # how long to rest on each spot (2-3 frames)
 
-# Measured: after the swipe the flip animation takes ~0.43 s before the camera
-# picture is visible. Lowering hides the map in ~0.05 s, but the monitor
-# animation needs ~0.3 s more before the office is fully visible again.
-CAMERA_UP_SECONDS = 0.45
+# Measured: the camera picture appears 0.50-0.61 s after touching the bar;
+# it disappears ~0.05 s after touching it again, then the monitor animation
+# needs a little longer before the next flip is accepted.
+CAMERA_UP_SECONDS = 0.55
 CAMERA_DOWN_SECONDS = 0.35
 
 # Measured: a camera switch shows the new feed within ~0.05 s, followed by a

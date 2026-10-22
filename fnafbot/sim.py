@@ -437,21 +437,23 @@ class SimBody:
         return self.sim.light[side]
 
     # -- camera
-    def camera_up(self) -> None:
+    def camera_up(self) -> bool:
         if self.sim.camera_state == "up":
-            return
+            return True
         if self.sim.camera_state == "lowering":
             self.wait_until(self.sim.now + self.sim.camera_frames * FRAME)
         self.sim.pending_camera_hover = True
         while self.sim.camera_state != "up" and not self.sim.over:
             self.sim.step()
+        return True
 
-    def camera_down(self) -> None:
+    def camera_down(self) -> bool:
         if self.sim.camera_state == "up":
             self.sim.pending_camera_hover = True
             self.sim.step()
         while self.sim.camera_state == "lowering" and not self.sim.over:
             self.sim.step()
+        return True
 
     def select_camera(self, camera: str) -> None:
         self.sim.pending_camera_select = camera

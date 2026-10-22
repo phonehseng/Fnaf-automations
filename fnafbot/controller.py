@@ -119,7 +119,7 @@ class Controller:
 
     def face(self, side: str) -> None:
         """Turn the office view fully to ``side`` so its buttons are clickable."""
-        if self.camera_is_up:
+        if self.camera_is_up or self.camera_showing():
             self.camera_down()
         target_pan = 0 if side == LEFT else layout.MAX_PAN
         self.mouse.move(layout.PAN_LEFT_X if side == LEFT else layout.PAN_RIGHT_X, 400)
@@ -199,35 +199,55 @@ class Controller:
     # ------------------------------------------------------------------
 
     def _swipe_camera_bar(self) -> None:
-        self.mouse.move(*layout.CAMERA_BAR_ABOVE)
-        time.sleep(0.02)
-        self.mouse.glide(*layout.CAMERA_BAR_ABOVE, *layout.CAMERA_BAR_INSIDE, seconds=0.03, steps=3)
+        """Re-arm, then touch the bar (see the CAMERA_REARM note in layout.py)."""
+        self.mouse.move(*layout.CAMERA_REARM)
+        time.sleep(layout.CAMERA_HOVER_SECONDS)
+        self.mouse.move(*layout.CAMERA_TRIGGER)
+        time.sleep(layout.CAMERA_HOVER_SECONDS)
+
+    def camera_showing(self) -> bool:
+        """True if the screen currently shows a camera (its room label is visible)."""
+        return self.vision.current_camera(self.window.grab()) is not None
 
     def camera_up(self) -> bool:
-        """Raise the monitor. Returns True once a camera picture is showing."""
-        if self.camera_is_up:
-            return True
-        self._swipe_camera_bar()
-        self.camera_is_up = True
-        self.side_in_view = None
-        deadline = time.perf_counter() + 1.0
-        while time.perf_counter() < deadline:
-            camera = self.vision.current_camera(self.window.grab())
-            if camera:
-                self.selected_camera = camera
+        """Raise the monitor; True once a camera picture is really showing.
+
+        Every flip is checked on screen and retried, because a flip the game
+        did not register would leave the bot clicking an office it cannot
+        see (doors and lights do not work while the monitor is up)."""
+        for attempt in range(3):
+            if self.camera_showing():
+                self.camera_is_up = True
                 return True
-            time.sleep(0.01)
-        log.warning("Monitor did not come up")
+            self._swipe_camera_bar()
+            deadline = time.perf_counter() + 1.0
+            while time.perf_counter() < deadline:
+                camera = self.vision.current_camera(self.window.grab())
+                if camera:
+                    self.camera_is_up = True
+                    self.side_in_view = None
+                    self.selected_camera = camera
+                    return True
+            log.warning("Monitor did not come up (attempt %d)", attempt + 1)
         return False
 
-    def camera_down(self) -> None:
-        """Lower the monitor and wait until the office is visible again."""
-        if not self.camera_is_up:
-            return
-        self._swipe_camera_bar()
-        self.mouse.move(layout.PAN_STILL_X, 400)  # leave the bar; don't pan
+    def camera_down(self) -> bool:
+        """Lower the monitor; True once the office is showing again (verified)."""
+        for attempt in range(3):
+            if not self.camera_showing():
+                break
+            self._swipe_camera_bar()
+            deadline = time.perf_counter() + 0.5
+            while time.perf_counter() < deadline and self.camera_showing():
+                pass
+            if not self.camera_showing():
+                break
+            log.warning("Monitor did not go down (attempt %d)", attempt + 1)
+        else:
+            return False
         self.camera_is_up = False
-        time.sleep(layout.CAMERA_DOWN_SECONDS)
+        self.mouse.move(*layout.CAMERA_REARM)  # dead zone: the view stays still
+        return True
 
     def view(self, camera: str) -> CameraReading:
         """Show ``camera`` on the monitor (raising it if needed) and read it."""

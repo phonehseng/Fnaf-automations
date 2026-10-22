@@ -31,6 +31,8 @@ def main() -> None:
     parser.add_argument("--custom", type=int, nargs=4)
     parser.add_argument("--max-seeds", type=int, default=300)
     parser.add_argument("--window", type=float, default=25.0, help="seconds of history to print")
+    parser.add_argument("--cause", default="", help="only stop at losses whose cause contains this text")
+    parser.add_argument("--seed", type=int, default=1, help="first seed to try")
     args = parser.parse_args()
     night = 7 if args.custom else args.night
     custom = dict(zip(("freddy", "bonnie", "chica", "foxy"), args.custom)) if args.custom else None
@@ -38,11 +40,11 @@ def main() -> None:
     handler = _Collect()
     logging.getLogger("fnafbot.brain").addHandler(handler)
     logging.getLogger("fnafbot.brain").setLevel(logging.INFO)
-    for seed in range(1, args.max_seeds + 1):
+    for seed in range(args.seed, args.seed + args.max_seeds):
         handler.lines.clear()
         sim = NightSim(night, custom, seed=seed)
         Brain(SimBody(sim), night, custom).play()
-        if not sim.result.survived:
+        if not sim.result.survived and args.cause in sim.result.cause:
             end = sim.result.seconds
             print(f"seed {seed}: {sim.result.cause} at {end:.2f}s\n--- game events ---")
             for line in sim.events:

@@ -44,8 +44,8 @@ CLICK_COOLDOWN_FRAMES = 10     # door/light clicks are ignored for 10 frames aft
 # Animation lengths measured on the live game (see tools/measure_timings.py).
 DOOR_CLOSE_SECONDS = 0.55      # click -> door counts as "fully closed"
 DOOR_OPEN_SECONDS = 0.45       # click -> door counts as "fully open"
-CAMERA_UP_SECONDS = 0.43       # hover over the bar -> camera picture showing
-CAMERA_DOWN_SECONDS = 0.30     # hover again -> monitor gone (camera stops instantly)
+CAMERA_UP_SECONDS = 0.55       # touch the bar -> camera picture showing (measured 0.50-0.61 s)
+CAMERA_DOWN_SECONDS = 0.30     # touch it again -> camera stops at once; monitor gone ~0.3 s later
 
 # ---------------------------------------------------------------------------
 # AI levels
