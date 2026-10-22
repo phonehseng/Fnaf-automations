@@ -127,11 +127,17 @@ def on_title_screen(window: GameWindow) -> bool:
 
 
 def unlocked(window: GameWindow) -> dict[str, bool]:
-    """Which extra menu entries the title screen shows right now."""
-    return {
-        "sixth": sprite_visible(window, catalog.TITLE_SIXTH_NIGHT),
-        "custom": sprite_visible(window, catalog.TITLE_CUSTOM_NIGHT),
-    }
+    """Which extra menu entries the title screen shows right now.
+
+    Several frames are checked: the title's rolling static band hides a
+    line of text for a few frames at a time, and one unlucky frame once
+    made the bot believe the 6th Night was not unlocked."""
+    found = {"sixth": False, "custom": False}
+    for _ in range(6):
+        found["sixth"] = found["sixth"] or sprite_visible(window, catalog.TITLE_SIXTH_NIGHT)
+        found["custom"] = found["custom"] or sprite_visible(window, catalog.TITLE_CUSTOM_NIGHT)
+        time.sleep(0.12)
+    return found
 
 
 # ---------------------------------------------------------------------------
