@@ -389,6 +389,42 @@ power-second clock with the measured scale (`Brain._next_tick`,
 phase 0). Why one Clickteam timer drifts and another does not is still
 open; the measurement is what the bot follows.
 
+**Chica's phase is different.** The next live Night 4 (06:10) was lost
+to Chica on a click made 0.05 s after k x 4.98 real seconds - she was
+already in - so her timer has no half-second offset. Phases are now per
+timer (`rules.TICK_PHASE`: Bonnie 0.4, Chica 0, Foxy unmeasured 0).
+
+---
+
+## 2026-10-22 - Where the power went once the timing was right (two blackouts)
+
+With the timers right, Night 4 was played twice to a blackout at 0 %
+with nobody inside. Both logs show the same thing: usage 3-4 for minutes,
+i.e. both doors shut nearly all the time. The simulator (now with a
+per-night power report, `tools/power_report.py`) reproduced it and the
+reasons, one by one:
+
+* a Foxy hold flip lowered the monitor too early on cove-check flips
+  (half of all ticks "not covered" -> alert -> both doors shut);
+* the live flip takes 0.75 s to show a picture, not the 0.55 s animation
+  the rules quote, so flips started late;
+* a door reopened 0.7 s before it had to shut again, then shut early for
+  a "schedule conflict" with the other side's light check - every cycle;
+* the right door starved: Bonnie's and Chica's ticks keep almost the same
+  spacing all night, so Chica's closing click could never be planned
+  around Bonnie's, and the right door stayed shut for 50-60 s at a time
+  (6 % each time).
+
+Fixes, all in `Brain`: `_hold_until` for every flip; the body reports its
+live flip latency; reopens need a 1.2 s open span; the door with the
+earlier tick is reopened first and may push a flip back by 0.5 s (flips
+are planned with that slack); a check that collides with a planned click
+moves the click earlier instead of shutting the door at once; and a door
+whose closing slot is blocked by the other door's click shifts that
+click. Simulated night 4: 30/30 at ~12 %; night 5 is still tight
+(22/30) - the margins that make the timing safe cost about ten points of
+power, and night 5's baseline alone is ~71 %.
+
 **Also noted (from the user):** the hall light works with the door shut,
 and on the right side Chica's window is beside the door, so a peek on
 the right may not need the door open at all. The simulator assumes a

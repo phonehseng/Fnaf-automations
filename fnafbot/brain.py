@@ -131,9 +131,11 @@ JIT_MIN_SLACK = 0.6
 JIT_HEADROOM = 0.2
 # A blind reopen must leave the door open at least this long (after it has
 # opened) before the just-in-time click shuts it again, or it is not worth it.
-MIN_OPEN_SPAN = 1.5
-# A quick reopen may start this much past the planned start of a Foxy flip.
-REOPEN_FLIP_SLACK = 0.3
+MIN_OPEN_SPAN = 1.2
+# A quick reopen may start this much past the planned start of a Foxy flip
+# (flips are planned 0.4 s before the latest safe moment, and _hold_until
+# keeps the picture up until the tick is covered anyway).
+REOPEN_FLIP_SLACK = 0.5
 
 
 class Body(Protocol):
