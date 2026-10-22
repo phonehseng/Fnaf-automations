@@ -74,10 +74,28 @@ def launch_game() -> None:
     log.info("Launched %s", config.GAME_EXE.name)
 
 
+def close_game() -> None:
+    """Close the game process (used only to get back to a clean title screen)."""
+    if is_running():
+        subprocess.run(["taskkill", "/IM", PROCESS_NAME, "/F"], capture_output=True)
+        time.sleep(2.0)
+
+
 def open_game() -> GameWindow:
-    """Find the running game (starting it if needed) and bring it to the front."""
-    if not is_running():
-        launch_game()
+    """Get the game to its title screen and bring it to the front.
+
+    If the game is already in the middle of something (e.g. a night that
+    started before the bot did), the bot cannot know when that night began,
+    and its whole timing depends on that. So it restarts the game instead."""
+    if is_running():
+        window = GameWindow()
+        window.find(timeout=10)
+        window.focus()
+        if wait_for_sprite(window, catalog.TITLE_CONTINUE, timeout=4):
+            return window
+        log.info("The game is not on its title screen - restarting it")
+        close_game()
+    launch_game()
     window = GameWindow()
     window.find(timeout=30)
     window.focus()
@@ -138,6 +156,12 @@ def choose(window: GameWindow, entry: str, custom_levels: dict[str, int] | None 
     }[entry]
     log.info("Menu: %s", entry)
     mouse.click(*target)
+    if entry != "custom":
+        # The title text stays visible while the screen fades out; wait for
+        # it to go so the caller does not mistake it for a new title screen.
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline and sprite_visible(window, catalog.TITLE_CONTINUE):
+            time.sleep(0.2)
     if entry == "custom":
         levels = custom_levels or {"freddy": 20, "bonnie": 20, "chica": 20, "foxy": 20}
         if levels == FORBIDDEN_CUSTOM_LEVELS:
