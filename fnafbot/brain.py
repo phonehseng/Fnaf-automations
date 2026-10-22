@@ -128,7 +128,12 @@ JIT_MIN_SLACK = 0.6
 # and the click cooldown): slack for a slow screen read or a monitor that
 # takes a moment longer to come down. A click 0.4 s late once let Bonnie
 # in (docs/DEVLOG.md); the click itself still waits for the planned moment.
-JIT_HEADROOM = 0.4
+JIT_HEADROOM = 0.2
+# A blind reopen must leave the door open at least this long (after it has
+# opened) before the just-in-time click shuts it again, or it is not worth it.
+MIN_OPEN_SPAN = 1.5
+# A quick reopen may start this much past the planned start of a Foxy flip.
+REOPEN_FLIP_SLACK = 0.3
 
 
 class Body(Protocol):
@@ -512,11 +517,21 @@ class Brain:
                     return False
             return True
 
-        for watch in (self.left, self.right):
+        # The door whose next tick comes first is the more urgent one to
+        # reopen: its closing click must be planned around the other door's,
+        # and the later that planning starts the fewer slots are left (the
+        # right door once stayed shut for 50 s because the left one was
+        # always served first).
+        for watch in sorted((self.left, self.right), key=lambda w: self._tick_after(w, now)):
             if self._peek_needed(watch, now):
                 if nothing_late(self._peek_estimate(watch)) and self._peek_fits(watch, now):
                     return lambda w=watch: self._peek(w)
-                if nothing_late(self._pan_time(watch.side) + 0.3):
+                # A quick blind reopen may push the next flip back a little:
+                # flips are planned with that much slack (see the gap list
+                # in _next_freeze_start) and _hold_until still covers the tick.
+                quick = self._pan_time(watch.side) + 0.3
+                if nothing_late(quick) or (now + quick <= min(self._next_commitment(now) + REOPEN_FLIP_SLACK, next_hard)
+                                           and all(now + quick + 1.5 < self._tick_after(w, now) for w in checks_needed)):
                     return lambda w=watch: self._reopen_blind(w)
 
         # 3) Safety checks through open doors, most urgent first.
@@ -532,17 +547,31 @@ class Brain:
                 checks.append((deadline, estimate, watch))
         for deadline, estimate, watch in sorted(checks, key=lambda c: c[0]):
             job = lambda w=watch: self._check_doorway(w)
-            if now + estimate + BUTTON_COOLDOWN > next_hard:
-                # Can the check wait until after the planned door click? Only
-                # if it still fits between that click and its own deadline.
-                # (Bonnie's and Chica's ticks once fell 0.9 s apart: the
-                # check was deferred, started after the click, and Chica
-                # walked in while the light was still being switched on -
-                # docs/DEVLOG.md.)
-                after_click = hard[0][1].close_at + BUTTON_COOLDOWN + estimate + 0.15
-                if deadline > after_click:
-                    continue
-                return shut_planned_door_now("schedule conflict")
+            if hard:
+                planned = hard[0][1]
+                # Does the check fit BEFORE the planned click (including the
+                # pan over to that door afterwards)? Bonnie's and Chica's
+                # ticks keep almost the same spacing all night, so this
+                # question comes up every cycle; answering it too
+                # cautiously shut a door early every 5 s.
+                pan_back = 0.0 if planned.side == watch.side else PAN_SECONDS
+                if now + estimate + pan_back + 0.1 > planned.close_at:
+                    # Can it wait until after the click instead? Only if it
+                    # still fits between that click and its own deadline.
+                    # (Deferring it without that test once let Chica in -
+                    # docs/DEVLOG.md.)
+                    after_click = planned.close_at + BUTTON_COOLDOWN + estimate + 0.15
+                    if deadline > after_click:
+                        continue
+                    # Otherwise move the click EARLIER, just enough for the
+                    # check to follow it before its deadline: a door shut a
+                    # second early costs one power charge, a door shut now
+                    # costs several.
+                    earlier = deadline - estimate - BUTTON_COOLDOWN - 0.15
+                    if earlier >= now + self._pan_time(planned.side) + BUTTON_COOLDOWN + 0.1:
+                        planned.close_at = earlier
+                        continue
+                    return shut_planned_door_now("schedule conflict")
             if freeze_start is None or now + estimate <= freeze_start:
                 return job
             if freeze_end + PAN_SECONDS + estimate > deadline:
@@ -719,6 +748,19 @@ class Brain:
                     if cost == 0:
                         break
             c -= 0.02
+        if best is None and busy:
+            # Every candidate collides with the other door's planned click.
+            # Bonnie's and Chica's ticks can sit half a second apart all
+            # night, so this is not rare: move the OTHER click earlier by
+            # the pan-and-cooldown spacing (one extra power charge there)
+            # so that this door gets its slot - otherwise it would stay
+            # shut for whole tick cycles (five charges each).
+            other = self.right if watch is self.left else self.left
+            spacing = PAN_SECONDS + BUTTON_COOLDOWN + 0.15
+            shifted = latest - spacing
+            if other.close_at is not None and shifted > now + self._pan_time(other.side) + BUTTON_COOLDOWN + 0.1:
+                other.close_at = min(other.close_at, shifted)
+                best = latest
         return best
 
     @staticmethod
@@ -761,7 +803,11 @@ class Brain:
         # Bonnie in). If there is no such moment, the door stays shut
         # through this tick and the question comes up again after it.
         close_at = self._plan_close(watch, earliest_extra=rules.DOOR_OPEN_SECONDS + 0.1)
-        if close_at is None:
+        if close_at is None or close_at - now < rules.DOOR_OPEN_SECONDS + MIN_OPEN_SPAN:
+            # No slot, or the door could only stay open for a moment: a
+            # reopen that is shut again almost at once saves nothing (live,
+            # a 0.7 s reopen followed by an early close was the pattern that
+            # kept both doors shut for minutes).
             watch.reopen_after = self._tick_after(watch, now) + TICK_SETTLE
             return
         self._press_door(watch)
@@ -824,7 +870,7 @@ class Brain:
         # to the tick but before the lock from the last re-lock runs out.
         # A flip that also looks at Pirate Cove stays up much longer.
         view = COVE_CHECK_VIEW_SECONDS if self._cove_check_due() else FREEZE_VIEW_SECONDS
-        for gap in (0.25, 0.4, 0.15, 0.55, 0.05, -0.15):
+        for gap in (0.4, 0.25, 0.55, 0.15, 0.05, -0.15):
             view_end = tick - gap
             view_start = view_end - view
             if self.power_safe(view_start, view) and gap <= FREEZE_LATEST_GAP:
