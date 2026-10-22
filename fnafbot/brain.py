@@ -134,6 +134,9 @@ JIT_HEADROOM = 0.1
 # door, not behind it, and reads normally; the left door covers Bonnie's
 # doorway completely.
 SEEN_THROUGH_SHUT_DOOR = {"left": False, "right": True}
+# A peek that has waited this long for a gap may push the other side's
+# routine check out of the way (see the scheduler).
+STUCK_PEEK_SECONDS = 4.0
 # A quick reopen may start this much past the planned start of a Foxy flip
 # (flips are planned 0.4 s before the latest safe moment, and _hold_until
 # keeps the picture up until the tick is covered anyway).
@@ -178,6 +181,7 @@ class DoorWatch:
     close_at: float | None = None  # planned just-in-time door click (night seconds)
     moving_until: float = 0.0      # the door's open/close animation ends at this time
     reopen_after: float = 0.0      # a reopen that found no closing slot waits until here
+    looked_while_open: bool = True # after a blind reopen: has the light been flashed yet?
 
 
 @dataclass
@@ -582,18 +586,43 @@ class Brain:
             if self._peek_needed(watch, now):
                 if nothing_late(self._peek_estimate(watch)) and self._peek_fits(watch, now):
                     return lambda w=watch: self._peek(w)
+                # A left peek that keeps losing to Chica's routine check: the
+                # left door can only be checked by opening it, but Chica can
+                # be checked through her window with the right door SHUT. So
+                # shut the right door (one cheap cycle) to make room - a left
+                # door waiting for a gap once stayed shut for 194 s.
+                other = self.right if watch is self.left else self.left
+                if (not SEEN_THROUGH_SHUT_DOOR[watch.side] and SEEN_THROUGH_SHUT_DOOR[other.side]
+                        and other in checks_needed and now - watch.closed_at > STUCK_PEEK_SECONDS
+                        and self._peek_fits(watch, now)
+                        and now + self._peek_estimate(watch) + PAN_SECONDS + BUTTON_COOLDOWN + 0.3
+                        <= min(self._next_commitment(now), next_hard)):
+                    return lambda o=other: self._shut_unchecked(o, reason="to make room for a peek")
                 # A quick blind reopen may push the next flip back a little:
                 # flips are planned with that much slack (see the gap list
                 # in _next_freeze_start) and _hold_until still covers the tick.
                 # Blind reopens keep cycling as long as nobody LOOKS: if it
                 # is not even known that they are at the door (it was shut
                 # for Foxy or on a failed light), wait for a peek instead.
-                if not watch.seen_for_sure or SEEN_THROUGH_SHUT_DOOR[watch.side]:
+                # (Chica's window can be checked with the door shut, so her
+                # door is never reopened blind.) An unseen Bonnie's door is
+                # reopened blind and then LOOKED through before the planned
+                # closing click - see _look_while_open.
+                if SEEN_THROUGH_SHUT_DOOR[watch.side]:
                     continue
                 quick = self._pan_time(watch.side) + 0.3
                 if nothing_late(quick) or (now + quick <= min(self._next_commitment(now) + REOPEN_FLIP_SLACK, next_hard)
                                            and all(now + quick + 1.5 < self._tick_after(w, now) for w in checks_needed)):
                     return lambda w=watch: self._reopen_blind(w)
+
+        # 2c) A door reopened blind: flash the light before its planned
+        # closing click. If they have gone, the click is cancelled and the
+        # door stays open; if they are there, the click goes ahead.
+        for watch in (self.left, self.right):
+            if not watch.door_closed and watch.at_door and watch.close_at is not None and not watch.looked_while_open:
+                look = self._pan_time(watch.side) + LIGHT_CHECK_SECONDS + BUTTON_COOLDOWN + 0.4
+                if now + look <= self._jit_due(watch) - 0.1 and nothing_late(look):
+                    return lambda w=watch: self._look_while_open(w)
 
         # 3) Safety checks through open doors, most urgent first.
         checks = []
@@ -873,6 +902,46 @@ class Brain:
             log.warning("Late door click for %s (%.3f s before the tick)", watch.who, tick - self.body.now())
         self._close_door(watch, reason="just in time", after=self.body.now() - BUTTON_COOLDOWN)
 
+    def _shut_unchecked(self, watch: DoorWatch, reason: str) -> None:
+        """Shut a door instead of doing its due light check. They may be
+        there (or arrive at the tick), so they are treated as possibly at the
+        door until a look - for Chica a cheap window look - says otherwise."""
+        self._press_door(watch)
+        watch.at_door = True
+        watch.seen_for_sure = False
+        watch.seen_at_door_at = self.body.now()
+        watch.checked_since_tick = True          # look again after their next tick
+        self.say(f"{watch.who.upper()} AT {watch.side.upper()} DOOR - door closed ({reason})")
+
+    def _look_while_open(self, watch: DoorWatch) -> None:
+        """Flash the light through a door that was reopened blind, before its
+        planned closing click. Their tick has passed since the reopen, so an
+        empty doorway means they cannot be back before their NEXT tick."""
+        name = watch.who.capitalize()
+        self.say(f"Is {name} still there? (light, door open until {watch.close_at:.2f}s)")
+        self.body.face(watch.side)
+        now = self.body.now()
+        self.body.wait_until(self.quiet_light_start(now, max(now, self._jit_due(watch) - LIGHT_CHECK_SECONDS - 0.2)))
+        if watch.door_closed or watch.close_at is None:
+            return
+        light_on_at = self.body.now()
+        self._press("light", watch.side)
+        present, lit = self.body.look_doorway(watch.side)
+        self.body.wait_until(max(self.body.now(), light_on_at + BUTTON_COOLDOWN))
+        if self.body.light_is_on(watch.side):
+            self._press("light", watch.side)
+        watch.looked_while_open = True
+        if not lit:
+            return                      # no news: the planned click stays
+        if present:
+            watch.seen_for_sure = True
+            watch.seen_at_door_at = self.body.now()
+            return
+        watch.at_door = False
+        watch.close_at = None
+        watch.min_moves = max(watch.min_moves, 1)
+        self.say(f"{name} has gone - {watch.side} door stays open")
+
     def _needlessly_shut(self, watch: DoorWatch, now: float) -> bool:
         """Shut although nobody is believed to be at it, with no planned click
         and no Foxy hold on it. Opening such a door is always safe: someone
@@ -921,6 +990,7 @@ class Brain:
             return
         self._press_door(watch)
         watch.close_at = close_at
+        watch.looked_while_open = False
         watch.checked_since_tick = True     # nothing to learn until their next tick
         self.say(f"{name} may still be there - door open until {close_at:.2f}s, then shut again")
 
