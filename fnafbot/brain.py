@@ -517,8 +517,7 @@ class Brain:
             return self._foxy_alert
 
         freeze_start = self._next_freeze_start(now)
-        freeze_end = (freeze_start + self.body.camera_up_seconds + FREEZE_VIEW_SECONDS + rules.CAMERA_DOWN_SECONDS
-                      if freeze_start is not None else None)
+        freeze_end = self._freeze_window(now)[1] if freeze_start is not None else None
 
         # 2b) A door shut through someone's tick: reopen it (with a look if
         # there is time, blind otherwise) as soon as nothing with a deadline
@@ -649,7 +648,11 @@ class Brain:
         start = self._next_freeze_start(now)
         if start is None:
             return None
-        return start, start + self.body.camera_up_seconds + FREEZE_VIEW_SECONDS + rules.CAMERA_DOWN_SECONDS
+        # A flip that also looks at Pirate Cove is up much longer than a
+        # plain hold (4B read, switch, settle, cove read, switch back). The
+        # plain figure once let such a flip overrun a planned door click.
+        view = COVE_CHECK_VIEW_SECONDS + 0.3 if self._cove_check_due() else FREEZE_VIEW_SECONDS
+        return start, start + self.body.camera_up_seconds + view + rules.CAMERA_DOWN_SECONDS
 
     # ------------------------------------------------------------------
     # Doorways
