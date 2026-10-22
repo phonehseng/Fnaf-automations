@@ -649,3 +649,30 @@ the classifier gave confident answers on them (one "Freddy, margin 34.6"
 on a frame with no Freddy). Fix: frames with more than 15 % near-white
 pixels in the picture area are thrown away before classification, and 4B
 counts as empty only if two clean frames agree.
+
+### Live 4/20 #4 (15:09): lost at ~55 s - Bonnie's timer was assumed 0.15 s late
+
+The bot concluded "Bonnie certainly sent back (AI 20, door shut)" at 49.5 s,
+reopened the left door, and he walked in at his next tick: the game-over
+static was already on screen in the next doorway frame. The proof needs
+the door fully closed at his tick; with a tick that really came ~0.15 s
+earlier than assumed, the door was still closing - the move waited, and
+the game's single move slot dropped it.
+
+So the phases were measured again, properly. New tool:
+`tools/measure_door_ticks.py`. The game switches the hall lights off on the
+very frame Bonnie or Chica arrives at or leaves a doorway, so on a Custom
+Night with only one of them active (AI 20) and the light kept on, the light
+button's lamp going dark timestamps their ticks to ~0.02 s.
+
+| timer | measured offset from k x period |
+|---|---|
+| Bonnie (12 ticks) | -0.02 .. +0.09 s (mean +0.04, incl. ~0.03 s capture delay) |
+| Chica (8 ticks) | -0.06 .. +0.06 s |
+| Foxy (4 knocks) | -0.05 .. -0.16 s |
+
+All three are essentially on time. This morning's camera-based numbers
+(+0.5 / +0.6 s) were wrong: that measurement kept the camera up all the
+time, which slows the power clock it was measured against. The brain now
+uses -0.05 / -0.05 / -0.1 s (erring early, the safe side for door clicks).
+Both measurement nights ran the power clock at exactly 1.0000 real s.

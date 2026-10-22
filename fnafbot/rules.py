@@ -24,25 +24,25 @@ FRAME = 1.0 / FPS
 # docs/DEVLOG.md, "the game's clock runs slow").
 TICK_SECONDS = 1.0065
 
-# The animatronics' movement timers do NOT stretch like the power timer:
-# measured live (tools/measure_ticks.py), Bonnie's room changes land at
-# 0.5 + k * 4.97 REAL seconds after the night start, with no drift, while
-# the power readout drops every 1.0065 real seconds. Chica walked in on a
-# click made 0.05 s after k * 4.98 real seconds, so her timer has no such
-# offset. The brain converts movement ticks with the measured scale (see
-# Brain._next_tick); each timer's phase is listed here, a little on the
-# early side so that errors fall on the safe side. Foxy's is unmeasured.
-# Measured against the bot's HUD-based night start: Bonnie +0.38..+0.62 s,
-# Chica +0.59..+0.79 s (tools/measure_ticks.py, 2026-10-22). Those times are
-# when a camera READING saw the room change, up to ~0.25 s after the move
-# itself, so they are upper bounds: the true phase lies up to 0.25 s below
-# the smallest one. The brain assumes the earliest plausible value - a door
-# click planned against a too-late phase once landed after Chica's move -
-# and TICK_SETTLE (0.4 s) covers the other side. Foxy was measured from his
-# bangs on the shut left door (tools/measure_foxy_phase.py: a bang lands
-# exactly 1500 frames after the tick that brought him to stage 3): his
-# ticks came 0.05 - 0.16 s BEFORE k x 5.01 s.
-TICK_PHASE = {"bonnie": 0.15, "chica": 0.35, "foxy": -0.1}
+# Movement ticks (Bonnie, Chica, Foxy) are computed in REAL seconds after
+# the night start: k x period + phase. The power clock is measured
+# separately (body.scale): it runs at exactly real time while the camera is
+# never raised, and up to 0.65 % slow on camera-heavy nights (the game drops
+# frames while the monitor shows static). Whether the movement timers slow
+# down the same way is not settled; the brain converts with the measured
+# power scale (Brain._next_tick), and the error margins cover the rest.
+# Measured precisely on 2026-10-22 with tools/measure_door_ticks.py (the
+# game switches the hall light off on the very frame Bonnie or Chica
+# arrives at or leaves a doorway, so the light button's lamp timestamps
+# their ticks to ~0.02 s): Bonnie -0.02..+0.09 s, Chica -0.06..+0.06 s,
+# both including ~0.03 s of capture delay - i.e. no offset. Foxy, measured
+# from his knocks (tools/measure_foxy_phase.py): -0.05..-0.16 s.
+# (An earlier camera-based measurement said +0.5 / +0.6 s; it ran with the
+# camera up all the time, which distorts the clock it was measured against,
+# and a door click planned against the too-late value lost a 4/20 night.)
+# The values err slightly early, which is the safe side for door clicks;
+# TICK_SETTLE covers the other side.
+TICK_PHASE = {"bonnie": -0.05, "chica": -0.05, "foxy": -0.1}
 
 FIRST_HOUR_SECONDS = 90        # 12 AM lasts 90 s ...
 HOUR_SECONDS = 89              # ... every later hour 89 s
