@@ -736,3 +736,119 @@ Departures are always confirmed by a look: Chica through her window with
 the door shut, Bonnie by a blind reopen whose closing click stays planned
 until a look says he has gone. Cost in the simulator: 4/20 59/60 at 12.3 %
 (was ~15 %).
+
+### Live 4/20 #8 (16:07): Bonnie at ~328 s, 41 % power - the timers fall behind
+
+With the AI-20 shortcut off the run looked healthy (Foxy never moved, every
+door visit handled) until ~328 s. The OBS frames: left door shut (green
+lamp) from 324.6 s, the bot's blind reopen at 326.6 s ("Bonnie may still be
+there"), door fully open by ~327 s, camera flip for Foxy, and Bonnie's
+jumpscare the instant the monitor came down at ~328.5 s.
+
+Two things from the decompiled events explain how:
+
+* Bonnie's timer ([188]) only *sets* the shared "move who?" counter to 1.
+  The doorway events consume it only when the left door is fully open
+  (AltA 0: [214], he gets in) or fully shut (AltA 2: [215], sent back).
+  While the door is moving (AltA 1 closing, 4 opening) the move simply
+  waits, and fires on the first frame the door finishes. So a reopen whose
+  click lands *before* his real tick lets him in, however fast the bot is.
+* For that, his tick must have come at least 0.54 s after the one the bot
+  computed (326.04 s). The same night's earlier blind reopens (296.96 s,
+  301.86 s) survived, so the lag was below ~0.7 s then.
+
+That lag is in old data too. The `measure_door_ticks.py --camera` run
+(Bonnie, camera raised between ticks) was summarised as "within 0.24 s",
+but in time order it reads +0.25 s until 160 s, then +0.32 s (195 s), +0.42
+(229 s), +0.47 (234 s): with the camera in use the movement timers *fall
+further behind* real time as the night goes on. On a quiet night they do
+not (-0.02 .. +0.09 s flat). Every 4/20 loss came after 270 s, where the
+bot's tick model was ~0.5 s early - looks "after" the tick were really
+before it, and reopens landed on it.
+
+Same reasoning for Foxy (event [191]): his ticks would move late out of the
+camera views meant to cover them, which fits the two Foxy runs late in #7.
+A full-night measurement with the camera in use is running to get the
+curve.
+
+### The timers' lag, measured over whole nights
+
+New tool `tools/measure_timer_clock.py`: Bonnie alone at AI 20, the camera
+up for most of every cycle (to load the game the way a 4/20 night does),
+and each tick timestamped from the hall light. Each prediction is anchored
+on the last tick actually seen, and the light covers both the real-time
+and the game-clock prediction, so a drifting model cannot make it miss
+ticks (the older tool timed its camera raises from the real-time model
+only, lost track of Bonnie, and its door logic went out of step).
+
+Bonnie's offset from k x 4.97 real seconds, two nights:
+
+| night time | plain start | with a warm-up at night start |
+|---|---|---|
+| 35-45 s | +0.18 .. +0.45 | +0.03 |
+| 60-90 s | +0.67 .. +0.79 | +0.08 .. +0.17 |
+| 135-170 s | +0.78 .. +0.90 | +0.08 .. +0.25 |
+| 200-260 s | +0.79 .. +0.85 | +0.32 .. +0.59 |
+| 280-340 s | +0.77 .. +0.84 | +0.86 .. +1.15 |
+| 340-445 s | +0.79 .. +0.84 | +1.10 |
+
+(The warm-up: both doors shut and opened, both lights, every camera viewed
+once, in the first 13 s.) So the movement timers fall behind real time by
+up to a second over a camera-heavy night, in bursts, by a different amount
+every night - and against the bot's fitted game clock they drift too (the
+second night: -0.2 s early on, then flat at -1.0 s from 160 s). Neither
+clock predicts the ticks; the lag has to be measured during the night.
+Live 4/20 #8 fits: ~0.6 s by 300 s, more than the 0.4 s of slack the bot
+allowed after a tick.
+
+**How the bot measures it:** someone seen at a shut door is sent back at
+their next tick (if they move at all), and the game switches the hall
+lights off on that frame. So the bot keeps the light on across that tick
+and watches the button's lamp (`Brain._watch_leave`). The lamp going dark
+proves they have gone - no need to open the door to look - and timestamps
+the tick. If the lamp stays lit they did not move. Every tick in the brain
+is now the earliest the real one can be (measured phase + the smallest lag
+the samples allow), and every "has the tick happened yet" decision and
+every Foxy flip allows for the largest lag they allow.
+
+**The catch:** early in the night Bonnie's, Chica's and Foxy's ticks fall
+within a second of each other (4.97 / 4.98 / 5.01 s), and the Foxy flip
+has to straddle Foxy's tick - so for the first ~200 s a departure watch
+always collides with a flip. Before the first sample the bot has to assume
+a wide range, which costs a lot of power (simulator: camera time and
+left-door time both doubled). Still being worked out.
+
+**Two more measurement nights, and what the bot does now.** A second cold
+start (no warm-up) repeated the first: +0.18 s at 25 s, +0.51 s at 55 s,
+then flat at +0.53 .. +0.62 s to the end (300 s). Three cold starts (two
+measured, live #8) all level off at 0.55 - 0.8 s within 90 s; the one
+night with a warm-up stayed small for two minutes and then kept climbing to
+1.1 s. So the warm-up (in the code, `WARMUP`) is off, and the bot plans for
+a cold start: until its first sample, the lag may be anything from 0 to
+0.15 s + 0.012 s per second after 20 s (capped at 0.95 s).
+
+Samples come from departure watches - when one fits. Fixes found in the
+simulator on the way:
+
+* A watch only proves anything for the FIRST tick that can have come after
+  they were last seen at the door - with the lag, that can be a tick whose
+  earliest time was before the sighting. Watching a later one read a
+  Chica who had already been sent back as "still at the door", and read
+  Bonnie *arriving* back as Bonnie leaving.
+* Early in the night Bonnie's and Chica's ticks are hundredths of a second
+  apart, so the lamp often cannot say whose tick it was; it still pins the
+  lag to one of two values, and both are kept (the earlier for door clicks,
+  the later for "has the tick happened").
+* Before the first sample a watch may take one Foxy flip's place (Foxy at
+  most one stage further); after that the flips win and a watch is cut
+  short to fit before them.
+* Foxy flips only cover 0.3 s of the lag range, not all of it: the lock a
+  picture sets lasts 50 + Random(1000) frames (event [329]), so a tick a
+  few tenths late is rarely missed - and covering the full range made
+  every flip a second longer.
+
+Simulator with timers lagging like the cold-start measurements (0.4 - 0.85 s
+jump, small drift), 40 nights each: the previous brain survives 1/40 4/20
+and 0/40 6th Nights (Bonnie, every time - as live); the new one 36/40
+(6.0 % left) and 36/40 (8.4 %), every loss a power-out. Night 5 29/40
+(6.9 %): the lag costs power everywhere, and Night 5 has the least spare.

@@ -113,6 +113,73 @@ FOXY_PHASE_SPREAD = 0.15
 # ...and it may also come this much BEFORE it (the simulator tells the brain
 # phases that are off by up to 0.15 s).
 FOXY_PHASE_EARLY = 0.15
+# The movement timers (Bonnie's, Chica's, Foxy's, Freddy's) fall behind
+# real time on a camera-heavy night, by a different amount every night
+# (tools/measure_timer_clock.py): one night +0.8 s by 90 s and then flat,
+# another a steady +0.002 s per second (+0.35 s by 200 s); live 4/20 #8 was
+# at ~0.6 s by 300 s. On a quiet night there is no lag. So every tick comes LATER than the measured
+# phases say, by an amount the brain measures live (see _watch_leave) and
+# brackets: the lag is at least the latest measurement minus LAG_NOISE (it
+# never shrinks), and at most the latest plus LAG_NOISE plus LAG_GROWTH for
+# every second since. Before the first measurement it is anything from 0 to
+# LAG_PRIOR, plus LAG_PRIOR_GROWTH per second after LAG_PRIOR_QUIET (on
+# three cold-started nights it jumped to 0.55 - 0.8 s within the first
+# minute and a half, then stayed there). (Not knowing about it lost live
+# 4/20 #8: a reopen "after" Bonnie's tick landed before it - docs/DEVLOG.md.)
+LAG_NOISE = 0.07
+LAG_GROWTH = 0.002
+# (Without the warm-up it jumps in the first minute: the early allowance
+# stays as a guard.)
+LAG_GROWTH_EARLY = 0.012
+LAG_EARLY_UNTIL = 90.0
+LAG_PRIOR = 0.15
+LAG_PRIOR_GROWTH = 0.012
+LAG_PRIOR_QUIET = 20.0
+LAG_SPREAD_MAX = 0.95
+# The lamp is read this long after it really goes dark (one screen grab).
+LAMP_SEEN_DELAY = 0.02
+# A departure watch (see _watch_leave) has the light on and confirmed lit
+# this long before the earliest possible tick, and keeps watching this long
+# after the latest one.
+WATCH_LEAD = 0.15
+WATCH_TAIL = 0.12
+LIGHT_ON_SECONDS = 0.1     # click -> lamp lit
+# A watch cut short (by a Foxy flip) is only worth it if it still covers
+# this much time after their earliest possible tick.
+MIN_WATCH_AFTER_TICK = 0.3
+# Until the lag has been measured once, every margin carries the wide prior
+# (camera flips longer, doors shut longer). But early in the night Bonnie's
+# and Chica's ticks fall within a second of Foxy's (4.97 / 4.98 / 5.01 s),
+# so a watch always collides with a Foxy flip - for the first ~150 s. So the
+# first watch may take the place of one flip, as long as Foxy cannot be
+# past this stage afterwards (one uncovered tick moves him one stage at
+# most, and the bot keeps track of that).
+LAG_HUNGRY_FOXY_STAGE = 1
+LAG_HUNGRY_AFTER = 15.0    # (not before this: nobody has reached a door yet)
+# ... and so may a later one, once the lag is this uncertain again.
+LAG_HUNGRY_SPREAD = 0.45
+
+# Warm-up. The game loads a door's animation, a light, a camera's picture
+# the first time it is used, and those stalls are what makes the
+# animatronics' timers fall behind real time early in a night: +0.5 s by
+# 55 s on two nights that started cold, +0.03 s at 40 s and under 0.12 s
+# until 140 s on a night that began by using everything once
+# (tools/measure_timer_clock.py --warmup; docs/DEVLOG.md). So the bot does
+# that in the first seconds, while nobody can reach a door (Bonnie needs
+# four moves, ~20 s): the camera tour rides along on the first Foxy flip,
+# the door and light cycles fill the gaps until WARMUP_UNTIL.
+# OFF: on the one night measured after a warm-up the lag stayed small for
+# two minutes but then kept growing (to 1.1 s by 300 s), while three cold
+# starts all levelled off at 0.55 - 0.8 s within 90 s - easier to plan for.
+WARMUP = False
+WARMUP_CAMERAS = ("1A", "1B", "5", "2A", "2B", "3", "7", "4A", "1C", "4B")
+WARMUP_UNTIL = 18.0
+# One side's warm-up: door shut and open again, light on and off.
+WARMUP_CYCLE_SECONDS = (2 * 0.03 + 0.45 + 0.15 + 0.45 + 0.15 + 2 * 0.26 + 0.3)
+
+# See Brain._foxy_lag_allowance.
+FOXY_LAG_CAP = 0.3
+
 # After someone was seen on 4B, assume it stays blocked this long before
 # planning another routine cove check.
 FOUR_B_BUSY_SECONDS = 20.0
@@ -174,6 +241,7 @@ class Body(Protocol):
     def press(self, kind: str, side: str) -> None: ...
     def look_doorway(self, side: str) -> tuple[bool, bool]: ...
     def light_is_on(self, side: str) -> bool: ...
+    def watch_lamp(self, side: str, until: float) -> float | None: ...
     def camera_up(self) -> bool: ...
     def camera_down(self) -> bool: ...
     def select_camera(self, camera: str) -> None: ...
@@ -204,6 +272,9 @@ class DoorWatch:
     reopen_after: float = 0.0      # a reopen that found no closing slot waits until here
     looked_while_open: bool = True # after a blind reopen: has the light been flashed yet?
     verify_departure: bool = False # a "certainly sent back" still to be checked with a look
+    watched_tick: float = -1e9     # a tick of theirs we watched with the light on (see _watch_leave)
+    planned_watch_tick: float = -1e9   # the tick a departure watch was waiting for
+    watch_skips: int = 0           # planned watches in a row that did not happen
 
 
 @dataclass
@@ -247,6 +318,14 @@ class Brain:
         self.four_b_busy_at = -1e9         # when 4B was last seen occupied (blocks cove checks)
         self.foxy_fuse_from = math.inf     # earliest moment Foxy may have reached stage 3
         self.view_intervals: list[tuple[float, float]] = []   # when a camera picture showed
+        # Measured lag of the movement timers: (night time, lag) samples, and
+        # the floor the tick model uses (see LAG_NOISE).
+        self.lag_samples: list[tuple[float, float, float]] = []   # (night time, lag at least, lag at most)
+        self.lag_lo = 0.0
+        # Warm-up still to do (see WARMUP_CAMERAS): the camera tour, and a
+        # door-and-light cycle on each side.
+        self.warmup_tour_done = not WARMUP
+        self.warmup_sides = [LEFT, RIGHT] if WARMUP else []
         self._view_started = 0.0           # when the current camera picture appeared
 
     # ------------------------------------------------------------------
@@ -293,9 +372,11 @@ class Brain:
             spoil the check (correctness - avoided whenever possible);
           * whole seconds, when power is charged (cost - avoided if possible).
         """
+        spread = self._lag_spread(earliest)
+
         def hits_move_tick(start: float) -> bool:
             for who in ("bonnie", "chica"):
-                tick = self._next_tick(who, start - MOVE_TICK_GUARD)
+                tick = self._next_tick(who, start - MOVE_TICK_GUARD - spread)
                 if tick <= start + LIGHT_CHECK_SECONDS + MOVE_TICK_GUARD:
                     return True
             return False
@@ -322,8 +403,69 @@ class Brain:
     # nights - docs/DEVLOG.md.
 
     def _timer(self, who: str) -> tuple[float, float]:
-        """(period, phase) of ``who``'s movement timer, in REAL seconds."""
-        return rules.TICK_PERIOD[who], self.body.tick_phases.get(who, 0.0)
+        """(period, phase) of ``who``'s movement timer, in REAL seconds: the
+        measured phase plus the smallest lag the timers can have now. Every
+        tick this gives is the EARLIEST the real tick can be; it may come up
+        to _lag_spread() later."""
+        return rules.TICK_PERIOD[who], self.body.tick_phases.get(who, 0.0) + self.lag_lo
+
+    def _lag_spread(self, at: float) -> float:
+        """How much later than the tick model a tick at night time ``at``
+        may come (see LAG_NOISE)."""
+        if not self.lag_samples:
+            return min(LAG_SPREAD_MAX, LAG_PRIOR + LAG_PRIOR_GROWTH * max(0.0, at - LAG_PRIOR_QUIET))
+        recent = [self.lag_samples[-1][2]]       # the latest sample's upper end
+        last = self.lag_samples[-1][0]
+        early = max(0.0, min(at, LAG_EARLY_UNTIL) - last)        # seconds of fast build-up since
+        late = max(0.0, at - max(last, LAG_EARLY_UNTIL))
+        growth = LAG_GROWTH_EARLY * early + LAG_GROWTH * late
+        return min(LAG_SPREAD_MAX, max(recent) + LAG_NOISE - self.lag_lo + growth)
+
+    def _foxy_lag_allowance(self, tick: float) -> float:
+        """How much of the lag range a Foxy flip covers. Not all of it: the
+        lock a camera picture sets lasts 50 + Random(1000) frames (event
+        [329]) - 9 s on average - and the bot plans for the 50-frame worst
+        case, so a tick that comes a few tenths after the planned cover is
+        only missed if the lock happened to be that short. Covering the
+        whole range made every flip a second longer (the simulator ran out
+        of power); a missed tick moves Foxy one stage at most, which the
+        bot's stage-3 alert is there for."""
+        return min(self._lag_spread(tick), FOXY_LAG_CAP)
+
+    def _note_lag(self, whos: tuple[str, ...], seen_at: float) -> float | None:
+        """A tick of one of ``whos`` was seen at night time ``seen_at`` (the
+        hall-light lamp went dark). Work out the timers' lag from it - one
+        candidate per name; when it is not known whose tick it was, the
+        sample is the range they span. Returns the (smallest) lag, or None
+        if the sighting cannot be one of their ticks."""
+        real = self.body.game_to_real(seen_at) - LAMP_SEEN_DELAY
+        lags = []
+        for who in whos:
+            period = rules.TICK_PERIOD[who]
+            base = self.body.tick_phases.get(who, 0.0)
+            k = round((real - base - self.lag_lo) / period)
+            lag = real - base - k * period
+            if self.lag_lo - 0.2 <= lag <= self.lag_lo + self._lag_spread(seen_at) + 0.25:
+                lags.append(lag)
+        if not lags:
+            log.warning("%.2fs  lamp went dark off every tick model (%s) - not used as a lag sample",
+                        seen_at, "/".join(whos))
+            return None
+        lag, high = min(lags), max(lags)
+        self.lag_samples.append((seen_at, lag, high))
+        new_lo = max(self.lag_lo, lag - LAG_NOISE)
+        if new_lo > self.lag_lo:
+            # Every tick moves later by the difference. Ticks already counted
+            # as passed must not be counted again when they "move" past the
+            # bookkeeping marks.
+            shift = self.body.real_to_game(new_lo) - self.body.real_to_game(self.lag_lo)
+            for watch in (self.left, self.right):
+                watch.last_tick_seen += shift
+            self.foxy_last_tick_seen += shift
+            self.lag_lo = new_lo
+        log.info("%.2fs  timers run %.2f..%.2f s late (%s) - model now +%.2f .. +%.2f s",
+                 seen_at, lag, high, "/".join(whos), self.lag_lo, self.lag_lo + self._lag_spread(seen_at))
+        return lag
 
     def _next_tick(self, who: str, after: float) -> float:
         """The first tick of ``who``'s timer strictly after night time ``after``.
@@ -347,7 +489,7 @@ class Brain:
         TICK_SETTLE ago may not have happened yet on the game's clock, so it
         still counts as upcoming. (Opening a door on the frame of their
         tick lets them in - found with the simulator's wandering clock.)"""
-        return self._next_tick(watch.who,now - TICK_SETTLE)
+        return self._next_tick(watch.who, now - TICK_SETTLE - self._lag_spread(now))
 
     def _moves_since(self, watch: DoorWatch, after: float, until: float) -> int:
         """How many of their ticks (with AI > 0) fall in (after, until]."""
@@ -377,12 +519,16 @@ class Brain:
         # A tick only counts as passed once the clock is certainly past it;
         # otherwise a doorway check could run just BEFORE the real tick and
         # report "empty" about a doorway they are about to step into.
-        now -= TICK_SETTLE
+        now -= TICK_SETTLE + self._lag_spread(now)
         for watch in (self.left, self.right):
             for tick in self._tick_times(watch.who,watch.last_tick_seen + 1e-6, now + 1e-6):
                 watch.last_tick_seen = tick
                 if self.ai(tick)[watch.who] == 0:
                     continue
+                if abs(tick - watch.watched_tick) < 1.0:
+                    continue    # watched with the light on: already accounted for
+                if abs(tick - watch.planned_watch_tick) < 1.0:
+                    watch.watch_skips += 1     # a watch was planned for it but did not happen
                 watch.checked_since_tick = False
                 if not watch.at_door:
                     watch.min_moves = max(0, watch.min_moves - 1)
@@ -451,7 +597,7 @@ class Brain:
         # either by the picture still showing or by the lock from the last
         # re-lock instant. (Assuming phase 0 let Foxy advance unseen on a
         # live 4/20 night - docs/DEVLOG.md.)
-        latest = tick + FOXY_PHASE_SPREAD
+        latest = tick + FOXY_PHASE_SPREAD + self._foxy_lag_allowance(tick)
         min_lock = rules.FOXY_LOCK_MIN_FRAMES * rules.FRAME
         for start, end in self.view_intervals[-4:]:
             first = start + FOXY_CLOCK_MARGIN          # picture certainly showing from here ...
@@ -629,14 +775,31 @@ class Brain:
         # checks and flips - but never delays them.
         checks_needed = [w for w in (self.left, self.right) if self._door_check_needed(w)]
 
-        def nothing_late(duration: float) -> bool:
-            if now + duration > min(self._next_commitment(now), next_hard):
+        def nothing_late(duration: float, skip_flip: bool = False) -> bool:
+            commitment = next_hard if skip_flip else min(self._next_commitment(now), next_hard)
+            if now + duration > commitment:
                 return False
             for w in checks_needed:
                 check = self._pan_time(w.side) + LIGHT_CHECK_SECONDS + BUTTON_COOLDOWN + 0.4
                 if now + duration + check > self._tick_after(w, now) - CHECK_DEADLINE_LEAD:
                     return False
             return True
+
+        # Someone SEEN at a shut door: watch them leave. The light goes on
+        # just before their next tick and its lamp is watched - the game
+        # switches it off on the very frame they leave. That proves they
+        # have gone without opening the door, and times their tick, which
+        # measures the timers' lag (see _watch_leave).
+        for watch in (self.left, self.right):
+            plan = self._watch_plan(watch, now)
+            if plan is None:
+                continue
+            start, light_by, _, end = plan
+            # (Started up to half a second early: the job waits for its moment.)
+            if (now >= start - 0.5
+                    and now + self._pan_time(watch.side) <= light_by - LIGHT_ON_SECONDS + 0.02
+                    and nothing_late(end - now + BUTTON_COOLDOWN + 0.1, skip_flip=self._lag_hungry())):
+                return lambda w=watch, p=plan: self._watch_leave(w, p)
 
         # A door shut on someone who has certainly gone (see
         # _certainly_repelled) and is not held shut for Foxy: just open it.
@@ -648,7 +811,7 @@ class Brain:
         # for "two doors due together" otherwise waited behind the other
         # door's reopen and the flip every cycle).
         for watch in sorted((self.left, self.right), key=lambda w: w.closed_at):
-            if self._peek_needed(watch, now):
+            if self._peek_needed(watch, now) and not self._watch_coming(watch, now):
                 if nothing_late(self._peek_estimate(watch)) and self._peek_fits(watch, now):
                     return lambda w=watch: self._peek(w)
                 # A left peek that keeps losing to Chica's routine check: the
@@ -747,7 +910,12 @@ class Brain:
         if freeze_start is not None and now >= freeze_start - 0.005:
             return self._freeze_foxy
 
-        # 5) Nothing else to do (peeks and reopens were considered in 2b).
+        # 5) Nothing else to do (peeks and reopens were considered in 2b):
+        # warm-up door cycles, if one fits before the next commitment.
+        if self.warmup_sides and now < WARMUP_UNTIL:
+            side = self.warmup_sides[0]
+            if nothing_late(self._pan_time(side) + WARMUP_CYCLE_SECONDS):
+                return lambda sd=side: self._warmup_cycle(sd)
         return None
 
     def _peek_estimate(self, watch: DoorWatch) -> float:
@@ -786,8 +954,15 @@ class Brain:
                 early = freeze_start - (PAN_SECONDS + BUTTON_COOLDOWN + 0.15)
                 if early > now:
                     wake = min(wake, early)
+        watches = [(plan[0], w) for w in (self.left, self.right)
+                   if (plan := self._watch_plan(w, now)) is not None and self._watch_coming(w, now)]
+        for start, _ in watches:
+            if start > now:
+                wake = min(wake, start)
         if planned:
             target = min(planned, key=lambda w: w.close_at).side
+        elif watches and min(watches, key=lambda x: x[0])[0] - now < 1.5:
+            target = min(watches, key=lambda x: x[0])[1].side
         else:
             # Face the side whose check comes next, so the check itself is quick.
             upcoming = min((self.left, self.right), key=lambda w: self._tick_after(w, now))
@@ -1034,6 +1209,188 @@ class Brain:
         return (watch.door_closed and not watch.at_door
                 and watch.close_at is None and now >= watch.moving_until)
 
+    # -- warm-up -----------------------------------------------------------
+
+    def _warmup_tour(self, tick: float) -> None:
+        """First Foxy flip of the night: show every camera once (see
+        WARMUP_CAMERAS) before settling on 4B. Kept short enough that the
+        picture still covers Foxy's tick the normal way."""
+        self.say("Warm-up: every camera once")
+        for camera in WARMUP_CAMERAS:
+            # Stop early if the tour would push the hold past the tick.
+            if self.body.now() > tick - FOXY_PHASE_EARLY - 0.6:
+                break
+            self.body.select_camera(camera)
+            self.camera_selected = camera
+        if self.camera_selected != "4B":
+            self.body.select_camera("4B")
+            self.camera_selected = "4B"
+        self.warmup_tour_done = True
+
+    def _warmup_cycle(self, side: str) -> None:
+        """Shut and open one door and flash its light, once, early in the
+        night (see WARMUP_CAMERAS)."""
+        watch = self.left if side == LEFT else self.right
+        self.warmup_sides.remove(side)
+        if watch.door_closed or watch.at_door or watch.min_moves <= 1:
+            return      # (never needed so early - but never risk it)
+        self.say(f"Warm-up: {side} door and light once")
+        self._press_door(watch)        # shut
+        self._press_door(watch)        # open again (waits for the animation)
+        self._press("light", side)
+        self.body.wait_until(self.body.now() + BUTTON_COOLDOWN)
+        if self.body.light_is_on(side):
+            self._press("light", side)
+
+    # -- watching them leave -------------------------------------------------
+
+    def _watch_plan(self, watch: DoorWatch, now: float) -> tuple[float, float, float, float] | None:
+        """(start, light on by, tick, watch until) for watching them leave at
+        their next tick - or None if there is nobody to watch. Only someone
+        SEEN at a shut door: the game sends them back (if they move at all)
+        and the lights go off on that frame. (A door still closing at their
+        tick only delays that until it is shut - see _watch_leave.)"""
+        if not (watch.at_door and watch.door_closed and watch.seen_for_sure and watch.close_at is None):
+            return None
+        if watch is self.left and self.foxy_emergency:
+            return None
+        lead = self._pan_time(watch.side) + LIGHT_ON_SECONDS + WATCH_LEAD
+        tick = self._next_tick(watch.who, now + lead - 0.03)
+        if self.ai(tick)[watch.who] == 0:
+            return None
+        # Only their FIRST tick since they were last seen there proves
+        # anything: after a tick nobody watched they may already have gone,
+        # and then a lamp that stays lit (or goes dark because they ARRIVED
+        # back) says nothing about the door. (Watching a later tick once
+        # read Bonnie's arrival as his departure - simulator.)
+        # (With the timers' lag, a tick whose earliest time is before the
+        # sighting may still have come after it: the first tick that counts
+        # is the first one that could have come after the sighting. Using
+        # the first one after it on the model once read a Chica who had
+        # already been sent back as "still at the door" - simulator.)
+        seen = watch.seen_at_door_at
+        if abs(tick - self._next_tick(watch.who, seen - self._lag_spread(seen) - 0.05)) > 0.5:
+            return None
+        light_by = tick - WATCH_LEAD
+        start = light_by - LIGHT_ON_SECONDS - self._pan_time(watch.side)
+        end = tick + self._lag_spread(tick) + WATCH_TAIL
+        # A Foxy flip comes first: watch only until it has to start. Their
+        # tick may still fall inside the shorter window (then it is measured
+        # all the same); if not, the watch proves nothing either way.
+        if not self._lag_hungry():
+            window = self._freeze_window(now)
+            if window is not None and window[1] > start:
+                end = min(end, window[0] - BUTTON_COOLDOWN - 0.1)
+                if end < tick + MIN_WATCH_AFTER_TICK:
+                    return None
+        return start, light_by, tick, end
+
+    def _watch_coming(self, watch: DoorWatch, now: float) -> bool:
+        """Is a departure watch planned for their next tick, with nothing
+        else (a Foxy flip, a planned door click) in its way? Then peeks and
+        blind reopens wait for it - it settles the same question without
+        opening the door. After two planned watches in a row that did not
+        happen, peeks go ahead again."""
+        if watch.watch_skips >= 2:
+            return False
+        plan = self._watch_plan(watch, now)
+        if plan is None:
+            return False
+        start, _, tick, end = plan
+        busy_until = end + BUTTON_COOLDOWN + 0.1
+        for w in (self.left, self.right):
+            if w.close_at is not None and start - 0.3 < w.close_at < busy_until + PAN_SECONDS:
+                return False
+        watch.planned_watch_tick = tick
+        return True
+
+    def _lag_hungry(self) -> bool:
+        """No lag measurement yet, and one uncovered Foxy tick is affordable:
+        the first watch may then take a Foxy flip's place (see
+        LAG_HUNGRY_FOXY_STAGE)."""
+        now = self.body.now()
+        uncertain = not self.lag_samples or self._lag_spread(now) > LAG_HUNGRY_SPREAD
+        return (uncertain and now >= LAG_HUNGRY_AFTER
+                and self.foxy_max_stage < LAG_HUNGRY_FOXY_STAGE and not self.foxy_emergency)
+
+    def _other_may_have_moved(self, watch: DoorWatch, seen_at: float) -> float | None:
+        """The lights go off when EITHER of them arrives at or leaves a
+        doorway. Could the other one have done so at ``seen_at``? Returns
+        the other's tick (model time) if so, else None."""
+        other = self.right if watch is self.left else self.left
+        if not (other.at_door or other.min_moves <= 2):
+            return None
+        tick = self._next_tick(other.who, seen_at - self._lag_spread(seen_at) - 0.15)
+        if tick <= seen_at + 0.15 and self.ai(tick)[other.who] > 0:
+            return tick
+        return None
+
+    def _watch_leave(self, watch: DoorWatch, plan: tuple[float, float, float, float]) -> None:
+        """Light on across their tick; did the lamp go dark by itself?
+
+        The game switches both hall lights off on the frame Bonnie or Chica
+        arrives at or leaves a doorway (events [226]/[227], [259]/[260]).
+        Someone at a fully shut door is sent back on their tick, so the lamp
+        going dark then means they have GONE - no need to open the door to
+        look - and it timestamps their tick to a screen grab, which tells
+        the brain how far the game's timers have fallen behind (see
+        LAG_NOISE). If the lamp stays lit they did not move: still there.
+        """
+        _, light_by, tick, end = plan
+        name = watch.who.capitalize()
+        self.body.face(watch.side)
+        self.body.wait_until(max(self.body.now(), light_by - LIGHT_ON_SECONDS))
+        self.say(f"Watching {name} leave (light on across their tick at {tick:.2f}s)")
+        self._press("light", watch.side)
+        self.body.wait_until(self.body.now() + LIGHT_ON_SECONDS)
+        if not self.body.light_is_on(watch.side):
+            log.info("%.2fs  the light did not come on - no watch this time", self.body.now())
+            return
+        dark_at = self.body.watch_lamp(watch.side, end)
+        if dark_at is None and end < tick + self._lag_spread(tick):
+            # Cut short (a Foxy flip was due) before their latest possible
+            # tick: no conclusion. The door question goes to a peek.
+            self.body.wait_until(max(self.body.now(), self.last_press_at + BUTTON_COOLDOWN))
+            if self.body.light_is_on(watch.side):
+                self._press("light", watch.side)
+            log.info("%.2fs  no change before the Foxy flip - %s's tick not seen", self.body.now(), watch.who)
+            return
+        if dark_at is None:
+            # Lit all through the tick: they did not move.
+            self.body.wait_until(max(self.body.now(), self.last_press_at + BUTTON_COOLDOWN))
+            if self.body.light_is_on(watch.side):
+                self._press("light", watch.side)
+            watch.watched_tick = tick
+            watch.watch_skips = 0
+            watch.checked_since_tick = True
+            watch.seen_at_door_at = self.body.now()
+            self.say(f"{name} is still at the door (did not move)")
+            return
+        other_tick = self._other_may_have_moved(watch, dark_at)
+        if other_tick is not None:
+            # Cannot tell who it was: leave the door to a normal peek after
+            # the tick. Early in the night their two ticks are almost
+            # together (4.97 / 4.98 s), and then the moment still measures
+            # the lag - against the LATER of the two ticks, which can only
+            # make the estimate too small (the safe side for door clicks).
+            self.say(f"Lights went out at {dark_at:.2f}s - but the other one may have moved too")
+            other = self.right if watch is self.left else self.left
+            self._note_lag((watch.who, other.who), dark_at)
+            return
+        # A door still closing at their tick holds the move until it is shut:
+        # then the lights went off when the door finished, not at the tick -
+        # a departure all the same, but no measure of the timers' lag.
+        door_shut_at = watch.moving_until - CLOCK_MARGIN - 0.05
+        if dark_at - LAMP_SEEN_DELAY > door_shut_at + 0.05 and self._note_lag((watch.who,), dark_at) is None:
+            return
+        watch.watched_tick = tick
+        watch.watch_skips = 0
+        watch.at_door = False
+        watch.checked_since_tick = True
+        watch.verify_departure = False
+        watch.min_moves = watch.distance[watch.repelled_to]
+        self.say(f"{name} left at {dark_at:.2f}s (seen by the light going out) - {watch.side} door can open")
+
     def _open_needless(self, watch: DoorWatch) -> None:
         self.body.face(watch.side)
         self.body.wait_until(max(self.body.now(), watch.moving_until))
@@ -1068,7 +1425,7 @@ class Brain:
         # decide this; it refused reopens that would have saved a charge,
         # and the door stayed shut for the whole next cycle - five charges.)
         if close_at is None or self._open_charges_saved(open_done, close_at) < 1:
-            watch.reopen_after = self._tick_after(watch, now) + TICK_SETTLE
+            watch.reopen_after = self._tick_after(watch, now) + TICK_SETTLE + self._lag_spread(now)
             return
         self._press_door(watch)
         watch.close_at = close_at
@@ -1143,14 +1500,19 @@ class Brain:
         # The picture must start showing before the earliest possible tick
         # and hold a re-lock late enough for the latest one (Foxy's phase is
         # unknown within FOXY_PHASE_SPREAD), so the view straddles the tick.
+        # The timers' lag may put the real tick up to _lag_spread() later:
+        # the view ends that much later too, and starts no later than for
+        # the earliest tick (so it gets longer while the lag is uncertain).
+        shift = self._foxy_lag_allowance(tick)
         for gap in (-0.1, -0.05, 0.0, -0.15, 0.05):
-            view_end = tick - gap
-            view_start = view_end - view
-            if self.power_safe(view_start, view) and view_start + FOXY_CLOCK_MARGIN <= tick - FOXY_PHASE_EARLY:
+            view_end = tick + shift - gap
+            view_start = min(view_end - view, tick - FOXY_PHASE_EARLY - FOXY_CLOCK_MARGIN - 0.08)
+            if self.power_safe(view_start, view_end - view_start):
                 self._freeze_view_end = view_end
                 return view_start - self.body.camera_up_seconds
-        self._freeze_view_end = tick + 0.15
-        return tick + 0.15 - view - self.body.camera_up_seconds
+        self._freeze_view_end = tick + shift + 0.15
+        return (min(tick + shift + 0.15 - view, tick - FOXY_PHASE_EARLY - FOXY_CLOCK_MARGIN - 0.08)
+                - self.body.camera_up_seconds)
 
 
     # -- camera sessions ---------------------------------------------------
@@ -1244,6 +1606,8 @@ class Brain:
         self.say("Camera flip: checking Foxy" if cove_check else "Camera flip to hold Foxy (resting on 4B)")
         if not self._raise_camera():
             return
+        if not self.warmup_tour_done and self.body.now() < WARMUP_UNTIL:
+            self._warmup_tour(tick)
         stage = None
         if cove_check and self._read_4b():
             stage = self._look_at_cove()
@@ -1277,9 +1641,10 @@ class Brain:
         view that was planned."""
         first_relock = math.floor((self._view_started + FOXY_CLOCK_MARGIN) * 10 + 1) / 10
         min_lock = rules.FOXY_LOCK_MIN_FRAMES * rules.FRAME
-        covering_relock = math.ceil((tick + FOXY_PHASE_SPREAD - (min_lock - FOXY_CLOCK_MARGIN)) * 10 - 1e-9) / 10
+        latest = tick + FOXY_PHASE_SPREAD + self._foxy_lag_allowance(tick)
+        covering_relock = math.ceil((latest - (min_lock - FOXY_CLOCK_MARGIN)) * 10 - 1e-9) / 10
         planned_end = getattr(self, "_freeze_view_end", 0.0)
-        if not (self._view_started < planned_end < tick + FOXY_PHASE_SPREAD):
+        if not (self._view_started < planned_end < latest):
             planned_end = 0.0
         return max(self.body.now(), self._view_started + FREEZE_VIEW_SECONDS, planned_end,
                    max(first_relock, covering_relock) + 0.1 + FOXY_CLOCK_MARGIN)

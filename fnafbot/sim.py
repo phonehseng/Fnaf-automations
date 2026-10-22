@@ -39,6 +39,20 @@ CAMERA_DOWN_FRAMES = round(rules.CAMERA_DOWN_SECONDS * FPS)
 CAMERA_DISRUPTION_FRAMES = 300
 
 
+# How far the movement timers may fall behind real time over a night (see
+# NightSim.timer_lag), and how quickly that lag builds up.
+# Two parts, both drawn per night, as measured on cold-started nights: a
+# jump to 0.5 - 0.85 s in the first minute and a half, and a small drift
+# after that.
+TIMER_LAG_JUMP = (0.4, 0.85)
+TIMER_LAG_START = (15.0, 35.0)       # seconds into the night the jump starts
+TIMER_LAG_BUILDUP = (10.0, 30.0)     # its time constant, seconds
+MAX_TIMER_LAG_RATE = 0.0008          # the drift, seconds per second ...
+TIMER_LAG_DRIFT_FROM = (60.0, 160.0)  # ... from this far into the night
+# Timers that run on the game's "every N seconds" clock and so share the lag.
+LAGGING_TIMERS = ("bonnie", "chica", "freddy", "foxy", "relock")
+
+
 @dataclass
 class _Timer:
     """An "every X seconds" timer, counted from the start of the night."""
@@ -112,6 +126,17 @@ class NightSim:
         self.foxy_run_frames = 0
         self.foxy_bangs = 0
 
+        # On the real game the movement timers fall behind real time when
+        # the game stalls, which it does early in a camera-heavy night (+0.8 s
+        # by 90 s, then flat - tools/measure_timer_clock.py). Each simulated
+        # night gets its own amount and build-up time, which the brain is NOT
+        # told: it has to measure the lag itself.
+        lag_rng = random.Random(f"lag-{seed}")
+        self.lag_total = lag_rng.uniform(*TIMER_LAG_JUMP)
+        self.lag_start = lag_rng.uniform(*TIMER_LAG_START)
+        self.lag_buildup = lag_rng.uniform(*TIMER_LAG_BUILDUP)
+        self.lag_rate = lag_rng.uniform(0.0, MAX_TIMER_LAG_RATE)
+        self.lag_drift_from = lag_rng.uniform(*TIMER_LAG_DRIFT_FROM)
         self.timers = {
             "power": _Timer(rules.POWER_TICK),
             "coin": _Timer(1.0),
@@ -148,6 +173,11 @@ class NightSim:
             self.over = True
             self.result = NightResult(False, max(self.power, 0), cause, self.now, self.events)
 
+    def timer_lag(self, t: float) -> float:
+        """How far the movement timers have fallen behind at night time t."""
+        jump = self.lag_total * (1.0 - math.exp(-max(0.0, t - self.lag_start) / self.lag_buildup))
+        return jump + self.lag_rate * max(0.0, t - self.lag_drift_from)
+
     def log(self, text: str) -> None:
         self.events.append(f"{self.now:7.2f}s {text}")
 
@@ -158,7 +188,9 @@ class NightSim:
             return
         self.frame += 1
         now = self.now
-        fired = {name: timer.fires(now) for name, timer in self.timers.items()}
+        lagged = now - self.timer_lag(now)
+        fired = {name: timer.fires(lagged if name in LAGGING_TIMERS else now)
+                 for name, timer in self.timers.items()}
 
         self._handle_clicks()
         self._animate_doors()
@@ -394,7 +426,7 @@ LAMP_READ_SECONDS = 0.015       # one screenshot, one small patch (door button l
 # way, so timing that only works with a perfect clock fails here too.
 CLOCK_ERROR_SECONDS = 0.07
 # How wrong the brain's idea of each movement timer's phase may be.
-PHASE_ERROR_SECONDS = 0.15
+PHASE_ERROR_SECONDS = 0.06
 CAMERA_SETTLE_SECONDS = 0.12  # static burst after raising/switching (body.CAMERA_SETTLE default)
 COVE_SETTLE_SECONDS = 0.3     # Pirate Cove waits longer (body.CAMERA_SETTLE["1C"])
 CAMERA_READ_SECONDS = 0.08    # 2-3 frames grabbed and classified
@@ -479,6 +511,13 @@ class SimBody:
     def light_is_on(self, side: str) -> bool:
         self.advance(READ_SECONDS)
         return self.sim.light[side]
+
+    def watch_lamp(self, side: str, until: float) -> float | None:
+        while not self.sim.over and self.now() < until:
+            self.advance(LAMP_READ_SECONDS)
+            if not self.sim.light[side]:
+                return self.now()
+        return None
 
     def snapshot(self, label: str) -> None:
         """Nothing to save in the simulator."""

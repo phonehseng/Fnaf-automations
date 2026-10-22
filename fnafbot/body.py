@@ -451,6 +451,17 @@ class RealBody:
         """Read the LIGHT button's lamp (it does not flicker, unlike the hall)."""
         return self.vision.light_lamp_on(self.ctl.window.grab(), side)
 
+    def watch_lamp(self, side: str, until: float) -> float | None:
+        """Keep reading the light button's lamp until it goes dark by itself
+        (the game switches the hall lights off on the frame Bonnie or Chica
+        arrives at or leaves a doorway) or until night time ``until``.
+        Returns the night time it was seen dark, or None."""
+        while not self.over and self.now() < until:
+            frame = self._observe()          # also keeps the clock and the HUD up to date
+            if not self.vision.light_lamp_on(frame, side):
+                return self.now()
+        return None
+
     # ------------------------------------------------------------------
     # Camera
     # ------------------------------------------------------------------

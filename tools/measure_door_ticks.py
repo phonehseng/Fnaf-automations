@@ -71,7 +71,16 @@ def main() -> None:
                 time.sleep(max(0.0, to_next - 1.2))
                 ctl.camera_down()
                 ctl.face(side)
-                ctl.press(light)
+                # Lowering the monitor switches the hall lights off by
+                # itself (events [226]/[227] fire again once "viewing" is
+                # 0), possibly a frame after our click. So switch the light
+                # on, and keep at it until the lamp stays lit - otherwise
+                # that switch-off is mistaken for their tick.
+                for _ in range(4):
+                    time.sleep(0.15)
+                    if lamp_on():
+                        break
+                    ctl.press(light)
                 continue
         if lamp_on():
             continue

@@ -140,13 +140,14 @@ python -m pytest tests
 | 3 | won (after three lost replays, see the devlog) | 34 % |
 | 4 | won | 8 % |
 | 5 | won | 2 % |
-| 6th Night | runs out of power before 6 AM (nobody gets in) | - |
-| 20/20/20/20 | not yet | - |
+| 6th Night | won (with the last percent of power) | 0 % |
+| 20/20/20/20 | not yet - best attempt reached ~410 s of ~535 s | - |
 
 Every lost night on the way is written up in [docs/DEVLOG.md](docs/DEVLOG.md):
 what the log showed, what the game's own code says, the measurement that
-settled it, and the fix. The 6th Night and 4/20 are a scheduling-efficiency
-problem (door cycles cost power charges), not a safety one.
+settled it, and the fix. The 6th Night was a scheduling-efficiency problem
+(every door cycle costs power charges); 4/20 is both that and the game's
+timing being only knowable to about a tenth of a second.
 
 ## The status panel
 
