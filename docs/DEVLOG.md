@@ -587,3 +587,50 @@ simulator:
   already have sent him back).
 
 After both: 4/20 195/200 (5 batteries, no break-ins), nights 2-6 500/500.
+
+### Live 4/20 #2 (14:28): lost to Foxy at 212 s - and what his code says
+
+Lost at 212 s with 61 % power. The monitor refused to come up, which the
+decompiled flip-up event `[130]` only does while Foxy is attacking
+(`fox progress == 5`) or Freddy is in. The last cove picture, at 208 s,
+was black: the game blanks a camera when someone moves in that room -
+Foxy leaving. The bot had treated the unreadable picture as "no news",
+and on 4/20 nights 4B (which must be clear before looking at the cove) is
+almost never clear: Foxy had not been seen for 200 s.
+
+What Foxy's events say (`[40]`, `[315]`-`[324]`):
+
+* At stage 3 he leaves exactly **1500 frames (25 s)** later, whatever the
+  cameras do - silently. The running sound ("run") only plays when he is
+  *made* to run by viewing West Hall at stage 3 (the bot's own emergency
+  move); then he arrives 100 frames later. So listening for him (a good
+  question from the user) cannot catch the dangerous case.
+* At the door: left door open -> jumpscare; shut -> he knocks, and the
+  power drops by **10 + 50 x (earlier knocks)** units: 1 %, 6 %, 11 %,
+  16 %... Keeping him in the cove matters for power, not only safety.
+
+Changes:
+
+1. An unreadable cove counts as "Foxy may be out" (alert at once).
+2. Because the fuse is 25 s, a *possible* stage 3 no longer shuts doors
+   immediately: the bot tries to look on its normal flips and only runs
+   the full alert (left door shut, right door too if 4B is busy, look)
+   7 s before the earliest possible end of the fuse.
+3. **Foxy's timer phase, measured** (`tools/measure_foxy_phase.py`): a
+   Custom Night 0/0/0/20, left door shut, camera never raised; every
+   knock lands 1500 frames after the tick that brought him to stage 3 and
+   shows as a power drop between the once-per-second charges. Four knocks
+   (6 %, 11 %, 16 %, 21 % - the formula exactly) put his ticks 0.05 -
+   0.16 s *before* k x 5.01 s. The brain now uses -0.1 s and covers 0.15 s
+   either side; covering an unknown phase (up to 0.6 s late) had cost
+   ~4 % of camera power.
+   Side finding: with the camera never raised, the power clock ran at
+   exactly 1.0000 real s per second - the 0.65 % slowdown comes from
+   camera use (the game drops frames while the monitor's static plays).
+4. A Foxy alert keeps the camera up across a Foxy tick that falls in the
+   middle of it.
+5. A double-counted pan made the scheduler choose a light check over an
+   overdue Foxy flip ("safety first") when the check could have waited.
+
+Simulated 4/20 after all five: 60/60, 16.0 % left on average (worst 9.8 %),
+0.12 knocks per night.

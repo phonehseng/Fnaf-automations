@@ -100,6 +100,19 @@ FREEZE_LATEST_GAP = 0.833 - 0.1 - FOXY_CLOCK_MARGIN
 # attacks 25 s after reaching stage 3, so a missed stage must be noticed
 # well inside that.
 FOXY_VERIFY_EVERY = 15.0
+# Foxy at stage 3 attacks after 1500 frames (event [320]); assume a little
+# less than 25 s. The full alert (shut the left door, look) starts this long
+# before the earliest possible end of that fuse.
+FOXY_FUSE_SECONDS = 24.5
+FOXY_ALERT_LEAD = 7.0
+# Foxy's real tick may come up to this long after the one the brain
+# computes from rules.TICK_PHASE (measured to within ~0.1 s from his bangs;
+# before the measurement this had to be 0.6 s, which cost ~4 % of camera
+# power on 4/20 nights), so every flip covers the whole range...
+FOXY_PHASE_SPREAD = 0.15
+# ...and it may also come this much BEFORE it (the simulator tells the brain
+# phases that are off by up to 0.15 s).
+FOXY_PHASE_EARLY = 0.15
 # After someone was seen on 4B, assume it stays blocked this long before
 # planning another routine cove check.
 FOUR_B_BUSY_SECONDS = 20.0
@@ -216,13 +229,14 @@ class Brain:
         # not covered by a camera flip may have moved him one stage).
         self.foxy_stage = 0
         self.foxy_max_stage = 0
-        self.foxy_verified_at = -1e9
+        self.foxy_verified_at = 0.0            # he starts the night in the cove, stage 0
         self.foxy_last_tick_seen = 0.0
         self.foxy_frozen_tick = 0.0        # last Foxy tick we have planned a flip for
         self.foxy_emergency = False        # Foxy left the cove: left door must stay shut
         self.foxy_door_hold = False        # left door shut until we have looked at the cove
         self.foxy_alert_retry_at = 0.0     # earliest time for another Foxy alert attempt
         self.four_b_busy_at = -1e9         # when 4B was last seen occupied (blocks cove checks)
+        self.foxy_fuse_from = math.inf     # earliest moment Foxy may have reached stage 3
         self.view_intervals: list[tuple[float, float]] = []   # when a camera picture showed
         self._view_started = 0.0           # when the current camera picture appeared
 
@@ -381,6 +395,10 @@ class Brain:
             self.foxy_last_tick_seen = tick
             if self.ai(tick)["foxy"] > 0 and not self._foxy_tick_covered(tick) and self.foxy_max_stage < 3:
                 self.foxy_max_stage += 1
+                if self.foxy_max_stage >= 3:
+                    # His 25 s fuse (1500 frames at stage 3) can only have
+                    # started at this tick: no hurry until near its end.
+                    self.foxy_fuse_from = min(self.foxy_fuse_from, tick)
                 log.info("%.2fs  Foxy tick at %.2f s was not covered by a flip (could be stage %d)",
                          now, tick, self.foxy_max_stage)
 
@@ -404,13 +422,23 @@ class Brain:
         picture-showing interval BEFORE the tick, no more than 0.833 s
         earlier. (A picture that appears a moment before the tick, but after
         the last 0.1 s instant, does NOT protect it.)"""
+        # Foxy's timer phase is unmeasured: his real tick may come up to
+        # FOXY_PHASE_SPREAD after ``tick``. The whole range must be covered,
+        # either by the picture still showing or by the lock from the last
+        # re-lock instant. (Assuming phase 0 let Foxy advance unseen on a
+        # live 4/20 night - docs/DEVLOG.md.)
+        latest = tick + FOXY_PHASE_SPREAD
+        min_lock = rules.FOXY_LOCK_MIN_FRAMES * rules.FRAME
         for start, end in self.view_intervals[-4:]:
             first = start + FOXY_CLOCK_MARGIN          # picture certainly showing from here ...
-            last = min(end, tick) - FOXY_CLOCK_MARGIN  # ... until here
-            if last - first < 0.0:
+            last = end - FOXY_CLOCK_MARGIN             # ... until here
+            if last < first or first > tick - FOXY_PHASE_EARLY:
                 continue
             last_relock = math.floor(last * 10 + 1e-9) / 10   # latest 0.1 s instant <= last
-            if last_relock >= first and tick - last_relock <= 0.833 - FOXY_CLOCK_MARGIN:
+            if last_relock < first:
+                continue
+            protected_until = max(last, last_relock + min_lock - FOXY_CLOCK_MARGIN)
+            if protected_until >= latest:
                 return True
         return False
 
@@ -545,7 +573,13 @@ class Brain:
         # A light check whose deadline falls inside the alert (it takes a
         # few seconds) goes first: Foxy needs 25 s from leaving the cove to
         # attack, Bonnie/Chica need one tick to step in through an open door.
-        if self.foxy_max_stage >= 3 and not self.foxy_emergency and now >= self.foxy_alert_retry_at:
+        # Foxy at stage 3 attacks exactly 1500 frames (25 s) later, whatever
+        # the cameras do (events [318]-[320]) - and silently: the running
+        # sound only plays when he is MADE to run by viewing West Hall. So a
+        # possible stage 3 leaves time for a cheap look on a normal flip;
+        # the full alert (doors shut, look) only runs near the fuse's end.
+        if (self.foxy_max_stage >= 3 and not self.foxy_emergency and now >= self.foxy_alert_retry_at
+                and now >= self.foxy_fuse_from + FOXY_FUSE_SECONDS - FOXY_ALERT_LEAD):
             for watch in (self.left, self.right):
                 if (self._door_check_needed(watch)
                         and self._tick_after(watch, now) - CHECK_DEADLINE_LEAD < now + FOXY_ALERT_SECONDS):
@@ -671,7 +705,7 @@ class Brain:
                     return shut_planned_door_now("schedule conflict")
             if freeze_start is None or now + estimate <= freeze_start:
                 return job
-            if freeze_end + PAN_SECONDS + estimate > deadline:
+            if freeze_end + estimate > deadline:   # (estimate already includes the pan)
                 return job        # cannot wait for the flip: safety first
             # Otherwise do the flip first; the check fits afterwards.
 
@@ -1080,14 +1114,17 @@ class Brain:
         # to the tick but before the lock from the last re-lock runs out.
         # A flip that also looks at Pirate Cove stays up much longer.
         view = COVE_CHECK_VIEW_SECONDS if self._cove_check_due() else FREEZE_VIEW_SECONDS
-        for gap in (0.4, 0.25, 0.55, 0.15, 0.05, -0.15):
+        # The picture must start showing before the earliest possible tick
+        # and hold a re-lock late enough for the latest one (Foxy's phase is
+        # unknown within FOXY_PHASE_SPREAD), so the view straddles the tick.
+        for gap in (-0.1, -0.05, 0.0, -0.15, 0.05):
             view_end = tick - gap
             view_start = view_end - view
-            if self.power_safe(view_start, view) and gap <= FREEZE_LATEST_GAP:
+            if self.power_safe(view_start, view) and view_start + FOXY_CLOCK_MARGIN <= tick - FOXY_PHASE_EARLY:
                 self._freeze_view_end = view_end
                 return view_start - self.body.camera_up_seconds
-        self._freeze_view_end = tick - 0.25
-        return tick - 0.25 - view - self.body.camera_up_seconds
+        self._freeze_view_end = tick + 0.15
+        return tick + 0.15 - view - self.body.camera_up_seconds
 
 
     # -- camera sessions ---------------------------------------------------
@@ -1106,6 +1143,17 @@ class Brain:
             self.body.select_camera("4B")
             self.camera_selected = "4B"
         return True
+
+    def _lower_camera_covering_foxy(self) -> None:
+        """Lower the monitor - but if one of Foxy's ticks is due within the
+        next second, keep the picture up long enough to cover it first.
+        Used by the longer procedures (Foxy alerts), whose short camera
+        views otherwise left the tick in the middle of them uncovered."""
+        tick = self._next_tick("foxy", self.body.now() - FOXY_PHASE_EARLY)
+        if self.ai(tick)["foxy"] > 0 and tick - self.body.now() < 1.0:
+            self.foxy_frozen_tick = max(self.foxy_frozen_tick, tick)
+            self.body.wait_until(self._hold_until(tick))
+        self._lower_camera()
 
     def _lower_camera(self) -> None:
         """Lower the monitor, always leaving it set to 4B for next time."""
@@ -1149,6 +1197,8 @@ class Brain:
         if not view["visible"] or view["foxy_stage"] is None:
             return None
         self.foxy_stage = self.foxy_max_stage = view["foxy_stage"]
+        if self.foxy_stage < 3:
+            self.foxy_fuse_from = math.inf
         self.foxy_verified_at = self.body.now()
         return self.foxy_stage
 
@@ -1166,6 +1216,14 @@ class Brain:
         stage = None
         if cove_check and self._read_4b():
             stage = self._look_at_cove()
+            if stage is None:
+                # An unreadable cove is not "no news": the game blanks a
+                # camera when someone moves in or out of that room, and a
+                # blank Pirate Cove was the only sign that Foxy had just left
+                # on a lost live 4/20 night. Treat it as "may be out".
+                self.foxy_max_stage = 3
+                self.foxy_fuse_from = -math.inf      # no time to lose
+                self.say("Pirate Cove unreadable - Foxy may be out", alert=True)
         # Whatever was done up there, the picture must stay up long enough
         # to freeze Foxy for this tick (a cove check that finished early
         # once left half of all ticks uncovered in the simulator).
@@ -1188,9 +1246,9 @@ class Brain:
         view that was planned."""
         first_relock = math.floor((self._view_started + FOXY_CLOCK_MARGIN) * 10 + 1) / 10
         min_lock = rules.FOXY_LOCK_MIN_FRAMES * rules.FRAME
-        covering_relock = math.ceil((tick - (min_lock - FOXY_CLOCK_MARGIN)) * 10 - 1e-9) / 10
+        covering_relock = math.ceil((tick + FOXY_PHASE_SPREAD - (min_lock - FOXY_CLOCK_MARGIN)) * 10 - 1e-9) / 10
         planned_end = getattr(self, "_freeze_view_end", 0.0)
-        if not (self._view_started < planned_end < tick):
+        if not (self._view_started < planned_end < tick + FOXY_PHASE_SPREAD):
             planned_end = 0.0
         return max(self.body.now(), self._view_started + FREEZE_VIEW_SECONDS, planned_end,
                    max(first_relock, covering_relock) + 0.1 + FOXY_CLOCK_MARGIN)
@@ -1208,7 +1266,9 @@ class Brain:
         # plain flip keeps Foxy frozen just as well, and if his possible
         # stage reaches 3 the alert procedure shuts the right door and looks.
         four_b_blocked = self.body.now() - self.four_b_busy_at < FOUR_B_BUSY_SECONDS
-        return wanted and not four_b_blocked
+        # A possible stage 3 is worth trying on every flip (4B is read
+        # first; if it is occupied the flip just holds Foxy).
+        return wanted and (not four_b_blocked or self.foxy_max_stage >= 3)
 
     def _foxy_alert(self) -> None:
         """Foxy may have left the cove (some of his ticks were not covered).
@@ -1225,7 +1285,7 @@ class Brain:
         if not self._raise_camera():
             return
         if not self._read_4b():
-            self._lower_camera()
+            self._lower_camera_covering_foxy()
             shut_right = not self.right.door_closed
             self._shut(self.right, "safe to look at Pirate Cove")
             # The right door must be FULLY shut before another camera shows.
@@ -1233,13 +1293,14 @@ class Brain:
             if not self._raise_camera():
                 return
         stage = self._look_at_cove()
-        self._lower_camera()
+        self._lower_camera_covering_foxy()
         if shut_right:
             self._release(self.right)
         if stage is None:
             # Unreadable: keep the left door shut and try again in a moment
             # (not immediately, so the doorway checks still get their turn).
             self.foxy_max_stage = 3
+            self.foxy_fuse_from = -math.inf
             self.foxy_alert_retry_at = self.body.now() + 2.0
             return
         self._after_cove_check(stage)
@@ -1278,7 +1339,8 @@ class Brain:
         self.foxy_emergency = False
         self.foxy_door_hold = False
         self.foxy_stage, self.foxy_max_stage = 0, 1      # he restarts at stage 0 or 1
-        self.foxy_verified_at = -1e9
+        self.foxy_fuse_from = math.inf
+        self.foxy_verified_at = self.body.now()   # he restarts in the cove (stage 0 or 1)
         if shut_right:
             self._release(self.right)
         self._release(self.left)

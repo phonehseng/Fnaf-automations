@@ -38,8 +38,11 @@ TICK_SECONDS = 1.0065
 # itself, so they are upper bounds: the true phase lies up to 0.25 s below
 # the smallest one. The brain assumes the earliest plausible value - a door
 # click planned against a too-late phase once landed after Chica's move -
-# and TICK_SETTLE (0.4 s) covers the other side. Foxy is unmeasured.
-TICK_PHASE = {"bonnie": 0.15, "chica": 0.35, "foxy": 0.0}
+# and TICK_SETTLE (0.4 s) covers the other side. Foxy was measured from his
+# bangs on the shut left door (tools/measure_foxy_phase.py: a bang lands
+# exactly 1500 frames after the tick that brought him to stage 3): his
+# ticks came 0.05 - 0.16 s BEFORE k x 5.01 s.
+TICK_PHASE = {"bonnie": 0.15, "chica": 0.35, "foxy": -0.1}
 
 FIRST_HOUR_SECONDS = 90        # 12 AM lasts 90 s ...
 HOUR_SECONDS = 89              # ... every later hour 89 s
