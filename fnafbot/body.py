@@ -23,13 +23,16 @@ import numpy as np
 
 from fnafbot import config, layout
 from fnafbot.controller import Controller, LEFT, RIGHT
+from fnafbot.screen import looks_shifted
 from fnafbot.vision import Vision
 
 log = logging.getLogger(__name__)
 
 # How long the HUD must be missing before we decide the night has ended
-# (6 AM screen, a jumpscare, or the power-out sequence).
-HUD_GONE_SECONDS = 1.5
+# (6 AM screen, a jumpscare, or the power-out sequence). Animations and the
+# display switch after a tab-out can hide it briefly, so be patient.
+HUD_GONE_SECONDS = 3.0
+HUD_GONE_LOOKS = 10
 
 # Typical delay between a game frame and our screenshot of it.
 CAPTURE_LATENCY = 0.015
@@ -130,10 +133,47 @@ class RealBody:
             log.debug("Clock refined by %+.3f s", new_t0 - self.t0)
             self.t0 = new_t0
 
+    def _ensure_game(self, frame: np.ndarray | None = None) -> bool:
+        """If someone switched away from the game, bring it back first.
+
+        The game keeps running while minimised, so this must happen fast.
+        After coming back, what the controller believed about the screen
+        (camera up or down, which side is in view) may be stale, so it is
+        re-read from the screen."""
+        window = self.ctl.window
+        brought_back = window.ensure_visible(picture_ok=self.vision.hud_visible)
+        if not brought_back and frame is not None and looks_shifted(frame):
+            # In front, but drawn in the shifted "quarter" state.
+            window.repair(picture_ok=self.vision.hud_visible)
+            brought_back = True
+        if brought_back:
+            # The screen stays black for a moment while the game switches the
+            # display back to 1280x720; wait until the HUD is really back.
+            deadline = time.perf_counter() + 5.0
+            back = False
+            while time.perf_counter() < deadline:
+                frame = self.ctl.window.grab()
+                if self.vision.hud_visible(frame):
+                    back = True
+                    break
+                time.sleep(0.05)
+            if not back:
+                log.warning("HUD not visible 5 s after bringing the game back")
+                self._save_evidence(frame, "after_restore")
+            self.ctl.camera_is_up = self.ctl.camera_showing()
+            self.ctl.side_in_view = None
+            self.facing = None
+            self.hud_missing_since, self.hud_missing_count = None, 0
+            log.warning("Resumed after the game was out of focus (%.2f s into the night)", self.now())
+            return True
+        return False
+
     def _observe(self) -> np.ndarray:
         """Grab a frame, update HUD-based state (power, night over, clock)."""
         self._check_stop()
         frame = self.ctl.window.grab()
+        if self._ensure_game(frame):
+            frame = self.ctl.window.grab()
         hud = self.vision.read_hud(frame)
         stamp = time.perf_counter()
         if hud.visible:
@@ -152,8 +192,11 @@ class RealBody:
             if self.hud_missing_since is None:
                 self.hud_missing_since = stamp
             self.hud_missing_count += 1
-            if self.hud_missing_count >= 5 and stamp - self.hud_missing_since > HUD_GONE_SECONDS:
+            if self.hud_missing_count >= HUD_GONE_LOOKS and stamp - self.hud_missing_since > HUD_GONE_SECONDS:
                 self.over = True
+                log.info("Night over: no HUD for %.1f s (%d looks); game in front: %s",
+                         stamp - self.hud_missing_since, self.hud_missing_count, self.ctl.window.in_front())
+                self._save_evidence(frame, "night_over")
         return frame
 
     def wait_until(self, t: float) -> None:
@@ -186,6 +229,7 @@ class RealBody:
 
     def face(self, side: str) -> None:
         self._check_stop()
+        self._ensure_game()
         self.ctl.face(side)
         self.facing = side
 
@@ -193,6 +237,8 @@ class RealBody:
         """Click a door or light button (the controller waits out the game's
         click cooldown). Alternates between two spots on the button."""
         self._check_stop()
+        if self._ensure_game():
+            self.ctl.face(side)   # the view may have moved while the game was away
         key = f"{kind}-{side}"
         alternate = self._toggle[key] = not self._toggle.get(key, False)
         if kind == "light":
@@ -256,6 +302,7 @@ class RealBody:
 
     def camera_up(self) -> bool:
         self._check_stop()
+        self._ensure_game()
         ok = self.ctl.camera_up()
         # A freshly raised camera also starts with a burst of static.
         self._switched_at = time.perf_counter()
@@ -266,6 +313,7 @@ class RealBody:
 
     def select_camera(self, camera: str) -> None:
         self._check_stop()
+        self._ensure_game()
         if self.ctl.selected_camera != camera:
             self.ctl.mouse.click(*layout.CAMERA_BUTTONS[camera])
             self.ctl.selected_camera = camera

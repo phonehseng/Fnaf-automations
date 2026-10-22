@@ -26,7 +26,7 @@ import cv2
 
 from fnafbot import assets, catalog, config, layout
 from fnafbot.mouse import Mouse
-from fnafbot.screen import GameWindow
+from fnafbot.screen import GameWindow, looks_shifted
 
 log = logging.getLogger(__name__)
 
@@ -141,6 +141,11 @@ def unlocked(window: GameWindow) -> dict[str, bool]:
 
 def choose(window: GameWindow, entry: str, custom_levels: dict[str, int] | None = None) -> None:
     """Click a title-screen entry: 'new', 'continue', 'sixth' or 'custom'."""
+    title_ok = lambda frame: cv2.matchTemplate(  # noqa: E731 - small inline check
+        frame, assets.load(catalog.TITLE_CONTINUE), cv2.TM_CCOEFF_NORMED).max() > 0.9
+    window.ensure_visible(picture_ok=title_ok)
+    if looks_shifted(window.grab()):
+        window.repair(picture_ok=title_ok)
     if not wait_for_sprite(window, catalog.TITLE_CONTINUE, timeout=40):
         raise MenuError("The title screen is not showing")
     time.sleep(0.5)  # let the menu finish fading in

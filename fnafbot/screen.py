@@ -16,6 +16,7 @@ import time
 import cv2
 import mss
 import numpy as np
+import win32api
 import win32con
 import win32gui
 
@@ -117,6 +118,70 @@ class GameWindow:
     def is_alive(self) -> bool:
         return bool(self.hwnd) and bool(win32gui.IsWindow(self.hwnd))
 
+    def in_front(self) -> bool:
+        """True if the game is the active window and not minimised."""
+        return win32gui.GetForegroundWindow() == self.hwnd and not win32gui.IsIconic(self.hwnd)
+
+    def display_ok(self) -> bool:
+        """True if the game is showing full screen at its native size.
+
+        After switching away and back, the game sometimes comes back in a
+        broken "zoomed / quarter" state (on high-DPI laptops the display mode
+        and the game disagree about the screen size). In the good state the
+        display mode is exactly 1280 x 720 and the game fills it."""
+        try:
+            mode = win32api.EnumDisplaySettings(None, win32con.ENUM_CURRENT_SETTINGS)
+        except Exception:
+            return True  # cannot tell; assume fine
+        self.refresh_position()
+        return (mode.PelsWidth, mode.PelsHeight) == (GAME_WIDTH, GAME_HEIGHT) and \
+            (self.left, self.top, self.width, self.height) == (0, 0, GAME_WIDTH, GAME_HEIGHT)
+
+    def ensure_visible(self, picture_ok=None) -> bool:
+        """Bring the game back if the user (or another program) switched away.
+
+        ``picture_ok(frame) -> bool`` (optional) checks that the game's
+        picture is really right, e.g. that the HUD sits exactly where it
+        should. That matters because after a switch-back the game sometimes
+        draws its picture shifted by (320, 180) - the "quarter" state - even
+        though the window and display mode look correct. Measured fix:
+        minimise, wait ~2 s, restore; repeated until the picture is right.
+
+        Returns True if the game had to be brought back (time has passed and
+        the screen state may have changed)."""
+        if self.in_front() and self.display_ok():
+            return False
+        log.warning("The game is not in front - bringing it back")
+        self.focus()
+        time.sleep(1.0)
+        self.repair(picture_ok)
+        return True
+
+    def repair(self, picture_ok=None) -> bool:
+        """Minimise/restore until the game is in front and drawn correctly."""
+        def picture_good() -> bool:
+            deadline = time.monotonic() + 3.0
+            while time.monotonic() < deadline:
+                frame = self.grab()
+                if not looks_shifted(frame) and (picture_ok is None or picture_ok(frame)):
+                    return True
+                time.sleep(0.1)
+            return False
+
+        for attempt in range(1, 8):
+            if self.in_front() and self.display_ok() and picture_good():
+                if attempt > 1:
+                    log.info("Game picture fixed after %d minimise/restore cycles", attempt - 1)
+                return True
+            log.warning("Game picture is wrong (shifted 'quarter' state?) - minimise/restore #%d", attempt)
+            win32gui.ShowWindow(self.hwnd, win32con.SW_MINIMIZE)
+            time.sleep(2.0)
+            self.focus()
+            time.sleep(1.0)
+        log.error("Could not bring the game back properly")
+        return False
+
+
     # -- coordinates --------------------------------------------------------
 
     def to_screen(self, x: float, y: float) -> tuple[int, int]:
@@ -128,10 +193,27 @@ class GameWindow:
     # -- capturing -----------------------------------------------------------
 
     def grab(self) -> np.ndarray:
-        """Capture the current game picture as a 1280x720 BGR image."""
+        """Capture the current game picture as a 1280x720 BGR image.
+        (While the game is minimised there is nothing to capture: a black
+        picture is returned, which every check treats as "not ready".)"""
+        if self.width <= 0 or self.height <= 0 or self.left <= -32000:
+            self.refresh_position()
+            if self.width <= 0 or self.height <= 0 or self.left <= -32000:
+                return np.zeros((GAME_HEIGHT, GAME_WIDTH, 3), np.uint8)
         shot = self._grabber.grab({"left": self.left, "top": self.top, "width": self.width, "height": self.height})
         frame = np.asarray(shot)[:, :, :3]  # mss gives BGRA; drop alpha
         if frame.shape[1] != GAME_WIDTH or frame.shape[0] != GAME_HEIGHT:
             # The game is stretched to another size (e.g. windowed); normalise it.
             frame = cv2.resize(frame, (GAME_WIDTH, GAME_HEIGHT), interpolation=cv2.INTER_AREA)
         return np.ascontiguousarray(frame)
+
+
+def looks_shifted(frame: np.ndarray) -> bool:
+    """The broken "quarter" state: the game draws its picture shifted by
+    (320, 180), so the top-left 310 x 170 pixels are pure black while the
+    rest of the screen has content. A real office or camera view never has a
+    pure-black top-left corner like that (and fully black screens such as
+    6 AM are not reported, because they have no content elsewhere either)."""
+    corner_black = int(frame[:170, :310].max()) <= 6
+    has_content = float(frame[180:, 320:].mean()) > 12
+    return corner_black and has_content

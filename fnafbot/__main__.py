@@ -30,7 +30,7 @@ from fnafbot.body import CAPTURE_LATENCY, RealBody, StopRequested
 from fnafbot.brain import Brain, Status
 from fnafbot.controller import Controller
 from fnafbot.overlay import StatusOverlay
-from fnafbot.screen import GameWindow
+from fnafbot.screen import GameWindow, looks_shifted
 from fnafbot.vision import Vision
 
 log = logging.getLogger("fnafbot")
@@ -103,7 +103,10 @@ class Session:
         while time.monotonic() < deadline:
             if self.stop.is_set():
                 raise StopRequested()
+            self.window.ensure_visible()   # someone may have switched away
             frame = self.window.grab()
+            if looks_shifted(frame):
+                self.window.repair()       # the shifted "quarter" picture
             if self.vision.hud_visible(frame):
                 return "night", time.perf_counter() - CAPTURE_LATENCY
             if time.monotonic() - last_title_check > 0.5:
