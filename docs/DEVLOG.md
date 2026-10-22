@@ -466,6 +466,22 @@ button is dead once he is inside). Two theories tested:
   the edge. Every "light did not come on" retry fits the same picture.
   Clicks are now spaced 0.26 s (15 frames) apart.
 
+**Confirmed on the next 6th Night (07:40):** not a single lost click or
+failed light in 500 s. That night was lost to the battery instead (0 % at
+495 s): the 6th Night's baseline drain is ~71 %, the Foxy flips ~3 %, and
+each door cycle (shut just in time, reopened after the tick) costs one to
+three power charges - with Bonnie at 10 and Chica at 12 there are ~60
+such cycles. The margins that made the timing safe (0.75 s click lead,
+0.65 s tick settle) were tightened to 0.5 / 0.4 now that the timer
+phases and the click cooldown are understood. The scheduler still leaves
+the right door shut too long on busy nights (simulated 6th Night: a few
+10-20 s closures per night); that is the next thing to fix for the 6th
+Night and 4/20, and it is a power problem, not a safety one.
+
+Where things stand at 08:00: Nights 1-5 won live with zero jumpscares in
+the final runs (Night 3 at 34 %, Night 4 at 8 %, Night 5 at 2 %); the 6th
+Night and 20/20/20/20 run out of power before 6 AM.
+
 **Also noted (from the user):** the hall light works with the door shut,
 and on the right side Chica's window is beside the door, so a peek on
 the right may not need the door open at all. The simulator assumes a
