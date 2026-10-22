@@ -132,13 +132,18 @@ class Session:
             self.overlay.show(
                 action=status.action,
                 alert=status.alert,
-                status=f"{label} | {rules.hour_at(t)} AM | Power {body.power()}% | "
-                       f"Usage {controller.hud.usage or '?'} | t={t:5.1f}s",
+                status=f"{label} | Power {body.power()}% | Usage {controller.hud.usage or '?'} | "
+                       f"t={t:5.1f}s | tick {body.scale:.4f}s",
                 threats=" | ".join(f"{name}: {note}" for name, note in status.notes.items()),
+                night_time=t,
+                rate=1.0 / body.scale,   # keeps the clock hands moving between updates
             )
 
         Brain(body, night, custom, report=report).play()
-        survived = body.now() >= rules.NIGHT_SECONDS - 2
+        # Only the game's own "6 AM" screen counts as a win. (An earlier
+        # version trusted the clock - "535 s passed, so we won" - and once
+        # called a jumpscare at 533 s a victory; see docs/DEVLOG.md.)
+        survived = body.six_am_seen
         power = body.power()
         self.results.append((label, survived, power))
         log.info("%s finished: %s with %d%% power", label, "SURVIVED" if survived else "LOST", power)

@@ -6,10 +6,13 @@ keeps the night clock.
 
 The night clock
     Every game timer counts from the first frame of the night, which is the
-    first frame where the office HUD is visible. Measured on the live game,
-    power changes then land 0.01 - 0.03 s after each whole second. The clock
-    keeps refining itself from those power changes (see _calibrate()), so the
-    brain can time actions to a couple of frames.
+    first frame where the office HUD is visible. The brain thinks in GAME
+    seconds (tick k of the power timer is at exactly k game seconds), but a
+    game second is a little longer than a real one (rules.TICK_SECONDS).
+    now() converts. Power changes are seen 0.01 - 0.03 s after each tick, and
+    the clock keeps refining both the night start and the length of a game
+    second from them (see _calibrate()), so the brain can time actions to a
+    couple of frames even late in the night.
 """
 
 from __future__ import annotations
@@ -21,7 +24,7 @@ import time
 import cv2
 import numpy as np
 
-from fnafbot import config, layout
+from fnafbot import config, layout, rules
 from fnafbot.controller import Controller, LEFT, RIGHT
 from fnafbot.screen import looks_shifted
 from fnafbot.vision import Vision
@@ -36,6 +39,13 @@ HUD_GONE_LOOKS = 10
 
 # Typical delay between a game frame and our screenshot of it.
 CAPTURE_LATENCY = 0.015
+
+# Measuring the game second: fit a line through (tick number, time seen) for
+# the power changes, once there are enough of them spread over enough ticks.
+# The slope is the real length of a game second. Clamped to a sane range.
+SCALE_MIN_SIGHTINGS = 20
+SCALE_MIN_SPAN_TICKS = 30
+SCALE_RANGE = (0.995, 1.02)
 
 # Doorway brightness (0-255 gray) above which the hall light counts as on
 # (only used to tell whether a light is still on before switching it off).
@@ -79,6 +89,10 @@ class RealBody:
         self.stop_flag = stop_flag
         self.t0 = 0.0                       # perf_counter() at the night's first frame
         self.t0_upper_bound = 0.0           # best proven upper bound on the true night start
+        self.scale = rules.TICK_SECONDS     # real seconds per game second
+        self._power_sightings: list[tuple[int, float]] = []   # (tick number, perf_counter seen)
+        self._fitted = False                # has the line fit taken over the clock?
+        self.six_am_seen = False            # the "6 AM" screen was on display: night won
         self.last_hud_seen = 0.0
         self.hud_missing_since: float | None = None   # first look that found no HUD
         self.hud_missing_count = 0                     # looks in a row without the HUD
@@ -116,26 +130,63 @@ class RealBody:
         log.info("Night started (clock running)")
 
     def now(self) -> float:
-        return time.perf_counter() - self.t0
+        """Night time in GAME seconds (what every rule in rules.py counts in)."""
+        return (time.perf_counter() - self.t0) / self.scale
 
     def _calibrate(self, seen_at: float) -> None:
         """Refine the clock from a power change seen at ``seen_at``.
 
-        Power only changes exactly on whole seconds of the night clock (tick
-        k happens at night_start + k). We can only see a change AFTER it
-        happened, so each sighting proves: night_start <= seen_at - k.
-        The tightest such bound (minus our typical capture delay) is the best
-        estimate of the night start.
+        Power only changes on the power timer's ticks: tick k happens at
+        night_start + k * scale (real seconds). Two things are learned:
+
+        1. The night start. We only see a change AFTER it happened, so each
+           sighting proves night_start <= seen_at - k * scale. The tightest
+           such bound (minus the typical capture delay) is the best estimate.
+        2. The scale (length of a game second). A straight line fitted
+           through (k, seen_at) has slope = scale. Without this the clock
+           drifts about 3.5 s over a night - enough to let Bonnie in
+           (docs/DEVLOG.md).
         """
-        k = round(seen_at - self.t0)
-        bound = seen_at - k
-        if abs(bound - self.t0) > 0.06:
-            return  # not a whole-second power charge (e.g. Foxy's bang): ignore
-        if bound < self.t0_upper_bound:
-            self.t0_upper_bound = bound
-            new_t0 = bound - CAPTURE_LATENCY
-            log.debug("Clock refined by %+.3f s", new_t0 - self.t0)
-            self.t0 = new_t0
+        elapsed = seen_at - self.t0
+        k = round(elapsed / self.scale)
+        if k < 1 or abs(elapsed - k * self.scale) > 0.25:
+            return   # nowhere near a tick: cannot tell which tick this was
+        if not self._fitted:
+            # Early in the night (before the line fit below has enough
+            # points): tighten the night start from this sighting. Only a
+            # change seen right after a tick is trusted, so that the extra
+            # charge for Foxy banging on the door cannot pull the start
+            # earlier.
+            bound = seen_at - k * self.scale
+            if abs(elapsed - k * self.scale) < 0.08 and bound < self.t0_upper_bound:
+                self.t0_upper_bound = bound
+                log.debug("Clock refined by %+.3f s", bound - CAPTURE_LATENCY - self.t0)
+                self.t0 = bound - CAPTURE_LATENCY
+        self._power_sightings.append((k, seen_at))
+        self._refit_clock()
+
+    def _refit_clock(self) -> None:
+        """Fit seen_at = t0 + k * scale through all power sightings so far.
+
+        The slope is the length of a game second; the intercept (minus the
+        typical capture delay) is the night start. Sightings far off the
+        line - the extra charge for Foxy's bang - are dropped and the line
+        fitted again."""
+        sightings = self._power_sightings
+        if len(sightings) < SCALE_MIN_SIGHTINGS or sightings[-1][0] - sightings[0][0] < SCALE_MIN_SPAN_TICKS:
+            return
+        ticks = np.array([k for k, _ in sightings], dtype=float)
+        seen = np.array([t for _, t in sightings])
+        slope, intercept = np.polyfit(ticks, seen, 1)
+        on_line = np.abs(seen - (slope * ticks + intercept)) < 0.1
+        if on_line.sum() >= SCALE_MIN_SIGHTINGS:
+            slope, intercept = np.polyfit(ticks[on_line], seen[on_line], 1)
+        new_scale = min(max(float(slope), SCALE_RANGE[0]), SCALE_RANGE[1])
+        new_t0 = float(intercept) - CAPTURE_LATENCY
+        if abs(new_scale - self.scale) > 0.0002 or abs(new_t0 - self.t0) > 0.02:
+            log.info("Clock fitted from %d power changes: game second = %.4f real s (was %.4f), "
+                     "night start moved %+.3f s", len(sightings), new_scale, self.scale, new_t0 - self.t0)
+        self.scale, self.t0, self._fitted = new_scale, new_t0, True
 
     def _ensure_game(self, frame: np.ndarray | None = None) -> bool:
         """If someone switched away from the game, bring it back first.
@@ -196,10 +247,18 @@ class RealBody:
             if self.hud_missing_since is None:
                 self.hud_missing_since = stamp
             self.hud_missing_count += 1
+            # Winning is decided by what replaces the HUD, never by the
+            # clock: only the "6 AM" screen counts (a jumpscare, the
+            # power-out blackout and the static afterwards look nothing
+            # like it).
+            if not self.six_am_seen and self.vision.six_am_visible(frame):
+                self.six_am_seen = True
+                log.info("6 AM screen seen at %.2f s - night won", self.now())
             if self.hud_missing_count >= HUD_GONE_LOOKS and stamp - self.hud_missing_since > HUD_GONE_SECONDS:
                 self.over = True
-                log.info("Night over: no HUD for %.1f s (%d looks); game in front: %s",
-                         stamp - self.hud_missing_since, self.hud_missing_count, self.ctl.window.in_front())
+                log.info("Night over: no HUD for %.1f s (%d looks); 6 AM seen: %s; game in front: %s",
+                         stamp - self.hud_missing_since, self.hud_missing_count, self.six_am_seen,
+                         self.ctl.window.in_front())
                 self._save_evidence(frame, "night_over")
         return frame
 

@@ -63,6 +63,12 @@ DOORWAY_BOXES = {
     "right": layout.Box(1130, 195, 1230, 455),
 }
 
+# The end-of-night "6 AM" screen: big white text inside this screen box, black
+# everywhere else. Rows above SIX_AM_SKIP_ROWS are ignored because the bot's
+# own status overlay is drawn there (layout.OVERLAY).
+SIX_AM_BOX = layout.Box(480, 260, 800, 420)
+SIX_AM_SKIP_ROWS = 80
+
 # Region (quarter-size rows y0:y1, cols x0:x1) used to find a camera's pan.
 # It is the left 800 x 530 px of the screen, below the recording dot and
 # above the power text: the map and HUD never cover it.
@@ -282,6 +288,21 @@ class Vision:
         region = frame[660:690, 30:120]
         score = cv2.matchTemplate(region, self.usage_label, cv2.TM_CCOEFF_NORMED).max()
         return bool(score > LABEL_MIN_SCORE)
+
+    def six_am_visible(self, frame: np.ndarray) -> bool:
+        """Is the end-of-night "6 AM" screen showing?
+
+        That screen is black everywhere except the big white "6 AM" in the
+        middle. A jumpscare fills the screen with colour, the power-out
+        blackout has no white text, and the static after a loss is grey all
+        over - none of them pass both tests below."""
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        box = SIX_AM_BOX
+        white_text = int((box.crop(gray) > 180).sum())
+        rest = gray[SIX_AM_SKIP_ROWS:].copy()      # skip the bot's own overlay at the top
+        rest[box.y0 - SIX_AM_SKIP_ROWS:box.y1 - SIX_AM_SKIP_ROWS, box.x0:box.x1] = 0
+        lit_elsewhere = int((rest > 60).sum())
+        return white_text > 400 and lit_elsewhere < 200
 
     def read_hud(self, frame: np.ndarray) -> Hud:
         """Read power, usage, hour and night from the HUD."""

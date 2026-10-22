@@ -1,0 +1,73 @@
+"""The night clock: the overlay's hands, the 6 AM screen detector and the
+game-second scale that RealBody learns from power changes."""
+
+import numpy as np
+
+from fnafbot import overlay, rules, vision
+
+
+def test_hour_hand_sweeps_half_a_turn():
+    assert overlay.clock_angles(0.0) == (0.0, 0.0)
+    hour, minute = overlay.clock_angles(rules.NIGHT_SECONDS / 2)
+    assert abs(hour - 90.0) < 1e-9
+    assert overlay.clock_angles(rules.NIGHT_SECONDS) == (180.0, 0.0)
+
+
+def test_minute_hand_turns_once_per_game_hour():
+    # 12 AM lasts 90 s: half way through, the minute hand points at 6.
+    assert abs(overlay.clock_angles(45.0)[1] - 180.0) < 1e-9
+    # 1 AM starts at 90 s and lasts 89 s.
+    assert abs(overlay.clock_angles(90.0)[1]) < 1e-9
+    assert abs(overlay.clock_angles(90.0 + 89.0 / 4)[1] - 90.0) < 1e-9
+
+
+def test_hour_names_and_countdown():
+    assert overlay.hour_name(0.0) == "12 AM"
+    assert overlay.hour_name(89.9) == "12 AM"
+    assert overlay.hour_name(90.0) == "1 AM"
+    assert overlay.hour_name(535.0) == "6 AM"
+    assert overlay.countdown_text(53.0) == "1 AM in 37 s"
+    assert overlay.countdown_text(600.0) == "6 AM"
+
+
+def _six_am_frame() -> np.ndarray:
+    frame = np.zeros((720, 1280, 3), dtype=np.uint8)
+    frame[300:380, 560:740] = 255          # the big white "6 AM"
+    return frame
+
+
+def test_six_am_screen_is_recognised():
+    v = vision.Vision.__new__(vision.Vision)     # no reference pictures needed
+    assert v.six_am_visible(_six_am_frame())
+
+
+def test_other_screens_are_not_six_am():
+    v = vision.Vision.__new__(vision.Vision)
+    static = np.random.default_rng(1).integers(0, 120, (720, 1280, 3), dtype=np.uint8)
+    assert not v.six_am_visible(static)                     # the static after a loss
+    assert not v.six_am_visible(np.zeros((720, 1280, 3), dtype=np.uint8))   # blackout
+    office = _six_am_frame()
+    office[400:700, 100:400] = 90                           # something lit elsewhere
+    assert not v.six_am_visible(office)
+
+
+def test_game_second_scale_is_learned_from_power_changes():
+    from fnafbot import body as body_module
+
+    body = body_module.RealBody.__new__(body_module.RealBody)
+    body.t0 = 1000.0
+    body.t0_upper_bound = 1000.02
+    body.scale = 1.0                    # start with a wrong belief: 1 game s = 1 real s
+    body._power_sightings = []
+    body._fitted = False
+    true_scale = 1.0065
+    rng = np.random.default_rng(0)
+    for k in range(1, 200):
+        delay = rng.uniform(0.005, 0.03)                     # we see a change a little after it
+        body._calibrate(1000.0 + k * true_scale + delay)
+        if k == 100:
+            body._calibrate(1000.0 + 100.6 * true_scale)    # Foxy's bang: a charge between ticks
+    assert abs(body.scale - true_scale) < 0.0003
+    assert abs(body.t0 - 1000.0) < 0.02
+    # The brain's clock (game seconds) now agrees with the real tick times.
+    assert abs((1000.0 + 500 * true_scale - body.t0) / body.scale - 500) < 0.05

@@ -16,6 +16,14 @@ import math
 FPS = 60                       # the game runs at 60 frames per second
 FRAME = 1.0 / FPS
 
+# How many REAL seconds one of the game's "every 1 second" ticks takes.
+# Measured on the live game: 6 AM (after 535 game seconds) arrived about
+# 538.5 real seconds after the night's first frame, in every logged night.
+# Every animatronic timer is the same kind of Clickteam timer, so all tick
+# times in this file are in GAME seconds; the body converts (see
+# docs/DEVLOG.md, "the game's clock runs slow").
+TICK_SECONDS = 1.0065
+
 FIRST_HOUR_SECONDS = 90        # 12 AM lasts 90 s ...
 HOUR_SECONDS = 89              # ... every later hour 89 s
 NIGHT_SECONDS = FIRST_HOUR_SECONDS + 5 * HOUR_SECONDS   # 6 AM at 535 s

@@ -76,6 +76,7 @@ class NightSim:
         self.over = False
         self.result: NightResult | None = None
         self.events: list[str] = []
+        self.spent: dict[str, int] = {}   # power units charged per thing switched on
 
         # Inputs queued by SimBody for the next frame.
         self.pending_clicks: list[tuple[str, str]] = []   # ("door"/"light", side)
@@ -163,6 +164,14 @@ class NightSim:
 
         if fired["power"]:
             self.power -= self.usage()
+            # Book-keeping for analysis: what was switched on at this charge.
+            for side in (LEFT, RIGHT):
+                if self.door[side] in (CLOSED, OPENING):
+                    self.spent[f"door {side}"] = self.spent.get(f"door {side}", 0) + 1
+                if self.light[side]:
+                    self.spent[f"light {side}"] = self.spent.get(f"light {side}", 0) + 1
+            if self.viewing:
+                self.spent["camera"] = self.spent.get("camera", 0) + 1
         if fired.get("passive"):
             self.power -= 1
         if self.power <= 0:
@@ -372,10 +381,15 @@ class NightSim:
 # The brain's view of the simulated game
 # ---------------------------------------------------------------------------
 
-# Realistic bot delays, matching the real controller.
+# Realistic bot delays, measured on the real game + controller, so that the
+# simulated power use matches what the real bot spends.
 PAN_SECONDS = 0.55          # full pan from one side to the other
 READ_SECONDS = 0.035        # grab a frame and analyse it
-CLICK_SECONDS = 0.02        # move + click
+DOORWAY_READ_SECONDS = 0.07 # wait for a lit frame and classify it
+CAMERA_SETTLE_SECONDS = 0.12  # static burst after raising/switching (body.CAMERA_SETTLE default)
+COVE_SETTLE_SECONDS = 0.3     # Pirate Cove waits longer (body.CAMERA_SETTLE["1C"])
+CAMERA_READ_SECONDS = 0.08    # 2-3 frames grabbed and classified
+CLICK_SECONDS = 0.03        # move + click
 BUTTON_COOLDOWN = 0.19      # same safety spacing as controller.BUTTON_COOLDOWN
 
 
@@ -422,7 +436,7 @@ class SimBody:
     def look_doorway(self, side: str) -> tuple[bool, bool]:
         """(someone there, light was really on). The light flickers dark on
         ~1 frame in 10; the real bot grabs frames until it gets a lit one."""
-        self.advance(READ_SECONDS)
+        self.advance(DOORWAY_READ_SECONDS)
         if not self.sim.light[side]:
             return False, False
         # With the door fully closed the doorway is hidden (verified live for
@@ -434,6 +448,7 @@ class SimBody:
         return who == "DOOR", True
 
     def light_is_on(self, side: str) -> bool:
+        self.advance(READ_SECONDS)
         return self.sim.light[side]
 
     # -- camera
@@ -463,7 +478,7 @@ class SimBody:
         """What the camera shows: {'occupants': set, 'foxy_stage': int|None,
         'visible': bool}. Freddy is only reported where the real vision can
         see him (Show Stage and E. Hall Corner)."""
-        self.advance(READ_SECONDS)
+        self.advance((COVE_SETTLE_SECONDS if camera == "1C" else CAMERA_SETTLE_SECONDS) + CAMERA_READ_SECONDS)
         sim = self.sim
         if sim.viewing != camera or sim.disrupted_frames > 0:
             return {"occupants": set(), "foxy_stage": None, "visible": False}

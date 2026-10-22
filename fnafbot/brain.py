@@ -53,8 +53,10 @@ BUTTON_COOLDOWN = 0.19
 # Keep extra power use this far away from each whole-second power charge.
 POWER_TICK_GUARD = 0.06
 
-# A doorway check (light on -> look -> light off) keeps the light on this long.
-LIGHT_CHECK_SECONDS = 0.24
+# A doorway check (light on -> look -> light off) keeps the light on this
+# long on the real game (the off-click must wait out the 0.17 s click
+# cooldown, plus looking and mouse time).
+LIGHT_CHECK_SECONDS = 0.3
 
 # Start checking this long after the animatronic's tick (the move happens on
 # that frame; we wait a couple of frames to be sure it has been applied).
@@ -71,10 +73,11 @@ CHECK_DEADLINE_LEAD = BUTTON_COOLDOWN + 0.12 + CLOCK_MARGIN
 
 PAN_SECONDS = 0.55
 
-# Camera session for Foxy: the camera picture must show for this long
-# (long enough to contain one of the game's 0.1 s re-lock instants and to
-# read E. Hall Corner).
-FREEZE_VIEW_SECONDS = 0.22
+# Camera session for Foxy: the camera picture shows for about this long (just
+# long enough to contain one of the game's 0.1 s re-lock instants), or much
+# longer when the flip also reads 4B and looks at Pirate Cove.
+FREEZE_VIEW_SECONDS = 0.25
+COVE_CHECK_VIEW_SECONDS = 1.0
 # The camera must go down no earlier than this before Foxy's tick: the lock
 # set at the last re-lock lasts at least 50 frames (0.833 s).
 FREEZE_LATEST_GAP = 0.833 - 0.1 - CLOCK_MARGIN
@@ -636,12 +639,14 @@ class Brain:
             return None
         # Camera picture showing during [view_start, view_end], ending close
         # to the tick but before the lock from the last re-lock runs out.
+        # A flip that also looks at Pirate Cove stays up much longer.
+        view = COVE_CHECK_VIEW_SECONDS if self._cove_check_due() else FREEZE_VIEW_SECONDS
         for gap in (0.25, 0.4, 0.15, 0.55, 0.05, -0.15):
             view_end = tick - gap
-            view_start = view_end - FREEZE_VIEW_SECONDS
-            if self.power_safe(view_start, FREEZE_VIEW_SECONDS) and gap <= FREEZE_LATEST_GAP:
+            view_start = view_end - view
+            if self.power_safe(view_start, view) and gap <= FREEZE_LATEST_GAP:
                 return view_start - rules.CAMERA_UP_SECONDS
-        return tick - 0.25 - FREEZE_VIEW_SECONDS - rules.CAMERA_UP_SECONDS
+        return tick - 0.25 - view - rules.CAMERA_UP_SECONDS
 
 
     # -- camera sessions ---------------------------------------------------
@@ -708,19 +713,27 @@ class Brain:
         now = self.body.now()
         tick = rules.next_tick(rules.FOXY_TICK, max(now, self.foxy_frozen_tick + 0.01))
         self.foxy_frozen_tick = tick
-        self.say("Camera flip to hold Foxy (resting on 4B)")
+        cove_check = self._cove_check_due()
+        self.say("Camera flip: checking Foxy" if cove_check else "Camera flip to hold Foxy (resting on 4B)")
         if not self._raise_camera():
             return
         stage = None
-        if self._read_4b():
-            due = self.body.now() - self.foxy_verified_at > FOXY_VERIFY_EVERY
-            if due or self.foxy_max_stage >= 2:
-                stage = self._look_at_cove()
-        # Keep the picture up for the planned time, then lower it.
-        self.body.wait_until(max(self.body.now(), self._view_started + FREEZE_VIEW_SECONDS))
+        if cove_check and self._read_4b():
+            stage = self._look_at_cove()
+        else:
+            # A plain flip only has to be up while one of the game's 0.1 s
+            # re-lock instants passes; every extra moment risks a power charge.
+            relock = math.floor((self._view_started + CLOCK_MARGIN) * 10 + 1) / 10
+            self.body.wait_until(max(self.body.now(), relock + CLOCK_MARGIN))
         self._lower_camera()
         if stage is not None:
             self._after_cove_check(stage)
+
+    def _cove_check_due(self) -> bool:
+        """Look at Pirate Cove on this flip? Only when it is worth the time:
+        Foxy may have moved (uncovered ticks), or it has been a while."""
+        return (self.foxy_max_stage >= 2
+                or self.body.now() - self.foxy_verified_at > FOXY_VERIFY_EVERY)
 
     def _foxy_alert(self) -> None:
         """Foxy may have left the cove (some of his ticks were not covered).

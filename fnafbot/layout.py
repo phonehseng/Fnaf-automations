@@ -122,10 +122,11 @@ CAMERA_NAME = Box(820, 285, 1110, 325)
 # the monitor is up.
 CAMERA_MAP = Box(830, 330, 1240, 670)
 
-# The bot's own status panel (overlay.py) is drawn here, top centre. Nothing
-# the vision code relies on is in this strip, and it is listed in
-# CAMERA_IGNORE below so the panel never confuses the camera checks.
-OVERLAY = Box(430, 0, 850, 58)
+# The bot's own status panel (overlay.py) is drawn here, top centre: a small
+# analog night clock on the left, the status text on the right. Nothing the
+# vision code relies on is in this strip, and it is listed in CAMERA_IGNORE
+# below so the panel never confuses the camera checks.
+OVERLAY = Box(350, 0, 930, 64)
 
 # Parts of a camera picture that are covered by the HUD/map and must be
 # ignored when comparing the picture to the reference images.
