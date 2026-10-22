@@ -50,6 +50,9 @@ SCALE_RANGE = (0.995, 1.02)
 # shortly before (so the moment of the change is known to +- half of it).
 SIGHTING_MAX_GAP = 0.12
 
+# Write the power left to the log this often (night seconds).
+POWER_LOG_EVERY = 30.0
+
 # Doorway brightness (0-255 gray) above which the hall light counts as on
 # (only used to tell whether a light is still on before switching it off).
 LIT_THRESHOLD = 11.0
@@ -96,6 +99,7 @@ class RealBody:
         self._power_sightings: list[tuple[int, float]] = []   # (tick number, perf_counter seen)
         self._fitted = False                # has the line fit taken over the clock?
         self.six_am_seen = False            # the "6 AM" screen was on display: night won
+        self.power_logged_at = -1e9         # night time of the last power trace line
         self.last_hud_seen = 0.0
         self.hud_missing_since: float | None = None   # first look that found no HUD
         self.hud_missing_count = 0                     # looks in a row without the HUD
@@ -252,6 +256,10 @@ class RealBody:
                     # look at the HUD and this one.
                     self._calibrate(stamp, gap=stamp - self.last_hud_seen)
                 self.last_power = hud.power
+                # A power trace in the log, for working out where it went.
+                if self.now() - self.power_logged_at >= POWER_LOG_EVERY:
+                    self.power_logged_at = self.now()
+                    log.info("power %d%% at %.0f s (usage %s)", hud.power, self.now(), hud.usage)
             self.last_hud_seen = stamp
             self.ctl.hud = hud
         else:

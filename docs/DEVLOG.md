@@ -202,3 +202,31 @@ Fix: remember when 4B was last seen occupied and do not plan a routine
 cove check for the next 10 s (`FOUR_B_BUSY_SECONDS`); only an uncovered
 Foxy tick forces one. Result on 100 simulated 4/20 nights: 100 survived,
 17.3 % power left on average (was 8.0 % and 99/100).
+
+---
+
+## 2026-10-22 - Live Night 4: blackout at 477 s (0 % power)
+
+The campaign continued (03:31) with the code from *before* the cove-check
+fix, and ran out of power at about 477 s. Counting the log:
+22 Foxy ticks "not covered by a flip", 6 Foxy alerts (left door shut, cove
+checked), one real Foxy run with a bang on the door, 9 "light did not come
+on" retries, and one camera flip the game did not register (the other
+nine "Monitor did not come up" lines are after the blackout, when the
+monitor no longer works).
+
+Lessons:
+1. The uncovered-tick -> alert -> doors-shut spiral is the power sink on
+   the real game too, exactly as in the simulator. 22 uncovered ticks on
+   a night with Foxy at level 2-3 means the flips were landing in the
+   wrong place or were skipped for door work, not that the game ignored
+   them.
+2. A reminder of what the cove check is for: ANY camera picture re-rolls
+   Foxy's lock every 0.1 s and keeps him in the cove; looking at 1C only
+   tells the bot which stage he is at. Fewer cove checks cost no safety.
+3. Heavy simulations and video renders were running on the same laptop
+   during this night. The game polls the mouse once per frame, so from
+   now on nothing heavy runs on this machine during a live night.
+
+The bot now writes the power left to the log every 30 s so the next loss
+can be read as a curve instead of a guess.
