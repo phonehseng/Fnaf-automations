@@ -64,9 +64,12 @@ def test_game_second_scale_is_learned_from_power_changes():
     rng = np.random.default_rng(0)
     for k in range(1, 200):
         delay = rng.uniform(0.005, 0.03)                     # we see a change a little after it
-        body._calibrate(1000.0 + k * true_scale + delay)
+        body._calibrate(1000.0 + k * true_scale + delay, gap=0.03)
         if k == 100:
-            body._calibrate(1000.0 + 100.6 * true_scale)    # Foxy's bang: a charge between ticks
+            body._calibrate(1000.0 + 100.6 * true_scale, gap=0.03)   # Foxy's bang: a charge between ticks
+        if k % 7 == 0:
+            # A change noticed late, after a busy second: must not bend the line.
+            body._calibrate(1000.0 + k * true_scale + 0.9, gap=1.0)
     assert abs(body.scale - true_scale) < 0.0003
     assert abs(body.t0 - 1000.0) < 0.02
     # The brain's clock (game seconds) now agrees with the real tick times.

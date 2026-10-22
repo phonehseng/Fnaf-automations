@@ -155,3 +155,30 @@ button, where a retry is harmless.
 
 The simulator never loses clicks, so this could only have been found on
 the real game - one more reason to keep replaying nights on camera.
+
+---
+
+## 2026-10-22 - Replay 4: WON (6 AM at 533 s) - and then the bot would not stop
+
+Fourth replay, 03:16 - 03:25. All three fixes held: the clock fitted
+itself to 1.0056 - 1.0070 s per game second as the night went on, Bonnie
+and Chica were shut out every time, and "6 AM screen seen at 533.26 s -
+night won" is in the log. Power left: 34 %.
+
+Then the log kept going. After 6 AM the game shows the next-day screen and
+the title; the HUD is gone. `RealBody._ensure_game` took the missing HUD
+for the "quarter-state" picture glitch, minimised and restored the game
+to repair it, reset the night-over counter every time, and the brain
+carried on playing an office that was not there - its door clicks landed
+on the title screen and pressed *Continue*. Night 4 started with nobody
+at the desk (stopped by hand at 81 % power; losing does not touch the
+save, which correctly says Night 4).
+
+**Fix.** Seeing the 6 AM screen ends the night at once; and the picture
+repair only runs while the HUD was on screen a moment ago. Between
+screens a missing HUD is normal.
+
+**Also learned:** the hall light does not come on for a moment right
+after Bonnie's tick (two "light did not come on" retries in this night,
+both 0.5 s after one of his ticks, both followed by a normal reading).
+The retry costs half a second; the door shuts if his next tick is close.

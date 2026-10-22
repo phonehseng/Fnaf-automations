@@ -92,7 +92,7 @@ FOXY_ALERT_SECONDS = 3.0
 # instead of trying the light again.
 LIGHT_FAIL_SHUT_LEAD = 1.3
 # How long after a door click to wait before reading the button's lamp.
-DOOR_LAMP_SETTLE = 0.05
+DOOR_LAMP_SETTLE = 0.03
 
 # Just-in-time doors (see Brain._plan_close): shut the door shortly before
 # Bonnie's/Chica's next tick instead of the moment they are seen.
@@ -102,7 +102,7 @@ JIT_DOORS = True
 # click delay (one frame), and - should the game miss the click - reading
 # the button's lamp (0.05 s) plus one click cooldown (0.19 s) for a second
 # click that still lands before the tick (see _confirm_door_click).
-JIT_MIN_LEAD = 0.45
+JIT_MIN_LEAD = 0.4
 # Only plan a later close if at least this much time is left to choose from.
 JIT_MIN_SLACK = 0.6
 

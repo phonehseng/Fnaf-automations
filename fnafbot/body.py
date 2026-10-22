@@ -46,6 +46,9 @@ CAPTURE_LATENCY = 0.015
 SCALE_MIN_SIGHTINGS = 20
 SCALE_MIN_SPAN_TICKS = 30
 SCALE_RANGE = (0.995, 1.02)
+# A power change only counts for the fit if the HUD was looked at this
+# shortly before (so the moment of the change is known to +- half of it).
+SIGHTING_MAX_GAP = 0.12
 
 # Doorway brightness (0-255 gray) above which the hall light counts as on
 # (only used to tell whether a light is still on before switching it off).
@@ -133,36 +136,36 @@ class RealBody:
         """Night time in GAME seconds (what every rule in rules.py counts in)."""
         return (time.perf_counter() - self.t0) / self.scale
 
-    def _calibrate(self, seen_at: float) -> None:
-        """Refine the clock from a power change seen at ``seen_at``.
+    def _calibrate(self, seen_at: float, gap: float = 2 * CAPTURE_LATENCY) -> None:
+        """Refine the clock from a power change seen at ``seen_at``; the
+        previous look at the HUD (which still showed the old value) was
+        ``gap`` seconds earlier, so the change happened inside that gap.
 
         Power only changes on the power timer's ticks: tick k happens at
         night_start + k * scale (real seconds). Two things are learned:
 
-        1. The night start. We only see a change AFTER it happened, so each
+        1. The night start. The change was seen AFTER it happened, so each
            sighting proves night_start <= seen_at - k * scale. The tightest
-           such bound (minus the typical capture delay) is the best estimate.
+           such bound is the best early estimate.
         2. The scale (length of a game second). A straight line fitted
-           through (k, seen_at) has slope = scale. Without this the clock
-           drifts about 3.5 s over a night - enough to let Bonnie in
-           (docs/DEVLOG.md).
+           through (k, time of change) has slope = scale. Without this the
+           clock drifts about 3.5 s over a night - enough to let Bonnie in
+           (docs/DEVLOG.md). Only changes pinned down to a short gap are
+           used for the fit: while the bot is busy it may not look at the
+           HUD for a second, and such a late sighting would bend the line.
         """
+        if gap > SIGHTING_MAX_GAP:
+            return   # noticed late: cannot even tell which tick it was
         elapsed = seen_at - self.t0
         k = round(elapsed / self.scale)
         if k < 1 or abs(elapsed - k * self.scale) > 0.25:
-            return   # nowhere near a tick: cannot tell which tick this was
+            return   # nowhere near a tick: not a whole-second charge
         if not self._fitted:
-            # Early in the night (before the line fit below has enough
-            # points): tighten the night start from this sighting. Only a
-            # change seen right after a tick is trusted, so that the extra
-            # charge for Foxy banging on the door cannot pull the start
-            # earlier.
             bound = seen_at - k * self.scale
-            if abs(elapsed - k * self.scale) < 0.08 and bound < self.t0_upper_bound:
+            if abs(elapsed - k * self.scale) < 0.08 + gap and bound < self.t0_upper_bound:
                 self.t0_upper_bound = bound
-                log.debug("Clock refined by %+.3f s", bound - CAPTURE_LATENCY - self.t0)
-                self.t0 = bound - CAPTURE_LATENCY
-        self._power_sightings.append((k, seen_at))
+                self.t0 = bound - gap / 2
+        self._power_sightings.append((k, seen_at - gap / 2))   # best guess: mid-gap
         self._refit_clock()
 
     def _refit_clock(self) -> None:
@@ -182,7 +185,7 @@ class RealBody:
         if on_line.sum() >= SCALE_MIN_SIGHTINGS:
             slope, intercept = np.polyfit(ticks[on_line], seen[on_line], 1)
         new_scale = min(max(float(slope), SCALE_RANGE[0]), SCALE_RANGE[1])
-        new_t0 = float(intercept) - CAPTURE_LATENCY
+        new_t0 = float(intercept)      # sightings are already mid-gap, so no delay to subtract
         if abs(new_scale - self.scale) > 0.0002 or abs(new_t0 - self.t0) > 0.02:
             log.info("Clock fitted from %d power changes: game second = %.4f real s (was %.4f), "
                      "night start moved %+.3f s", len(sightings), new_scale, self.scale, new_t0 - self.t0)
@@ -196,7 +199,16 @@ class RealBody:
         (camera up or down, which side is in view) may be stale, so it is
         re-read from the screen."""
         window = self.ctl.window
-        brought_back = window.ensure_visible(picture_ok=self.vision.hud_visible)
+        if self.over or self.six_am_seen:
+            return False
+        # The picture check (is the HUD drawn?) only makes sense while the
+        # HUD was there a moment ago. Between screens (6 AM, a jumpscare)
+        # it is legitimately missing, and "repairing" the game then would
+        # minimise and restore it in a loop and reset the night-over
+        # detection - which once kept the bot clicking on the title screen
+        # after a night it had won (docs/DEVLOG.md).
+        hud_recent = self.hud_missing_since is None
+        brought_back = window.ensure_visible(picture_ok=self.vision.hud_visible if hud_recent else None)
         if not brought_back and frame is not None and looks_shifted(frame):
             # In front, but drawn in the shifted "quarter" state.
             window.repair(picture_ok=self.vision.hud_visible)
@@ -232,13 +244,15 @@ class RealBody:
         hud = self.vision.read_hud(frame)
         stamp = time.perf_counter()
         if hud.visible:
-            self.last_hud_seen = stamp
             self.hud_missing_since = None
             self.hud_missing_count = 0
             if hud.power is not None:
                 if self.last_power is not None and hud.power != self.last_power:
-                    self._calibrate(stamp)
+                    # The change happened somewhere between the previous
+                    # look at the HUD and this one.
+                    self._calibrate(stamp, gap=stamp - self.last_hud_seen)
                 self.last_power = hud.power
+            self.last_hud_seen = stamp
             self.ctl.hud = hud
         else:
             # The HUD can be hidden for a few frames (e.g. by the monitor
@@ -253,7 +267,10 @@ class RealBody:
             # like it).
             if not self.six_am_seen and self.vision.six_am_visible(frame):
                 self.six_am_seen = True
+                self.over = True
                 log.info("6 AM screen seen at %.2f s - night won", self.now())
+                self._save_evidence(frame, "six_am")
+                return frame
             if self.hud_missing_count >= HUD_GONE_LOOKS and stamp - self.hud_missing_since > HUD_GONE_SECONDS:
                 self.over = True
                 log.info("Night over: no HUD for %.1f s (%d looks); 6 AM seen: %s; game in front: %s",

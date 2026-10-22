@@ -37,6 +37,8 @@ log = logging.getLogger("fnafbot")
 
 # How long to wait for the next screen (a night or the title) before giving up.
 SCREEN_TIMEOUT = 120.0
+# A completely black game window for this long means the game is stuck.
+BLACK_SCREEN_RESTART = 20.0
 
 
 def setup_logging() -> str:
@@ -100,6 +102,7 @@ class Session:
         self.overlay.show(action="Waiting for the next screen...", status="", threats="")
         deadline = time.monotonic() + SCREEN_TIMEOUT
         last_title_check = 0.0
+        black_since: float | None = None
         while time.monotonic() < deadline:
             if self.stop.is_set():
                 raise StopRequested()
@@ -109,6 +112,18 @@ class Session:
                 self.window.repair()       # the shifted "quarter" picture
             if self.vision.hud_visible(frame):
                 return "night", time.perf_counter() - CAPTURE_LATENCY
+            # After a minimise/restore the game sometimes draws nothing at
+            # all and never recovers (seen live: a black window for over a
+            # minute). Restarting it is the only way out.
+            if frame.max() < 8:
+                black_since = black_since or time.monotonic()
+                if time.monotonic() - black_since > BLACK_SCREEN_RESTART:
+                    log.warning("The game has shown a black screen for %.0f s - restarting it", BLACK_SCREEN_RESTART)
+                    menu.close_game()
+                    self.window = menu.open_game()
+                    black_since = None
+            else:
+                black_since = None
             if time.monotonic() - last_title_check > 0.5:
                 last_title_check = time.monotonic()
                 if menu.on_title_screen(self.window):

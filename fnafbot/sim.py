@@ -385,7 +385,8 @@ class NightSim:
 # simulated power use matches what the real bot spends.
 PAN_SECONDS = 0.55          # full pan from one side to the other
 READ_SECONDS = 0.035        # grab a frame and analyse it
-DOORWAY_READ_SECONDS = 0.07 # wait for a lit frame and classify it
+DOORWAY_READ_SECONDS = 0.07
+LAMP_READ_SECONDS = 0.015        # one screenshot, one small patch (door button lamp) # wait for a lit frame and classify it
 CAMERA_SETTLE_SECONDS = 0.12  # static burst after raising/switching (body.CAMERA_SETTLE default)
 COVE_SETTLE_SECONDS = 0.3     # Pirate Cove waits longer (body.CAMERA_SETTLE["1C"])
 CAMERA_READ_SECONDS = 0.08    # 2-3 frames grabbed and classified
@@ -453,8 +454,9 @@ class SimBody:
 
     def door_state(self, side: str) -> str | None:
         """The door button's lamp: 'closed' from the moment a closing click
-        is accepted (the simulator never loses clicks, but the brain checks)."""
-        self.advance(READ_SECONDS)
+        is accepted (the simulator never loses clicks, but the brain checks).
+        Reading one small patch of one screenshot is quick."""
+        self.advance(LAMP_READ_SECONDS)
         if self.facing != side:
             return None
         return "closed" if self.sim.door[side] in (CLOSING, CLOSED) else "open"
