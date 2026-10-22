@@ -55,6 +55,9 @@ SIGHTING_MAX_GAP = 0.12
 POWER_LOG_EVERY = 30.0
 # Warn when a timed wait ends this much later than asked.
 WAIT_OVERSHOOT_WARN = 0.15
+# Flip request -> camera picture readable, measured on the live game
+# (0.63 - 0.75 s in logs/2026-10-22 campaign runs).
+CAMERA_UP_LIVE = 0.75
 
 # Doorway brightness (0-255 gray) above which the hall light counts as on
 # (only used to tell whether a light is still on before switching it off).
@@ -100,6 +103,10 @@ class RealBody:
         self.t0_upper_bound = 0.0           # best proven upper bound on the true night start
         self.scale = rules.TICK_SECONDS     # real seconds per game (power) second
         self.tick_phases = dict(rules.TICK_PHASE)   # movement timers: real-second offsets after the night start
+        # From the flip request to a readable camera picture, measured live
+        # (hover, flip-up animation, label visible): longer than the bare
+        # animation the rules quote. The brain plans Foxy flips with it.
+        self.camera_up_seconds = CAMERA_UP_LIVE
         self._power_sightings: list[tuple[int, float]] = []   # (tick number, perf_counter seen)
         self._fitted = False                # has the line fit taken over the clock?
         self.six_am_seen = False            # the "6 AM" screen was on display: night won

@@ -493,7 +493,7 @@ class Brain:
             return self._foxy_alert
 
         freeze_start = self._next_freeze_start(now)
-        freeze_end = (freeze_start + rules.CAMERA_UP_SECONDS + FREEZE_VIEW_SECONDS + rules.CAMERA_DOWN_SECONDS
+        freeze_end = (freeze_start + self.body.camera_up_seconds + FREEZE_VIEW_SECONDS + rules.CAMERA_DOWN_SECONDS
                       if freeze_start is not None else None)
 
         # 2b) A door shut through someone's tick: reopen it (with a look if
@@ -598,7 +598,7 @@ class Brain:
         start = self._next_freeze_start(now)
         if start is None:
             return None
-        return start, start + rules.CAMERA_UP_SECONDS + FREEZE_VIEW_SECONDS + rules.CAMERA_DOWN_SECONDS
+        return start, start + self.body.camera_up_seconds + FREEZE_VIEW_SECONDS + rules.CAMERA_DOWN_SECONDS
 
     # ------------------------------------------------------------------
     # Doorways
@@ -829,9 +829,9 @@ class Brain:
             view_start = view_end - view
             if self.power_safe(view_start, view) and gap <= FREEZE_LATEST_GAP:
                 self._freeze_view_end = view_end
-                return view_start - rules.CAMERA_UP_SECONDS
+                return view_start - self.body.camera_up_seconds
         self._freeze_view_end = tick - 0.25
-        return tick - 0.25 - view - rules.CAMERA_UP_SECONDS
+        return tick - 0.25 - view - self.body.camera_up_seconds
 
 
     # -- camera sessions ---------------------------------------------------
