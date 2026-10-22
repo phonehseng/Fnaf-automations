@@ -880,3 +880,27 @@ Simulator experiments with the lag model's jump widened to 1.0 s (40
 nights): the committed brain 35/40 6th Nights, 30/40 4/20 - covering more
 of the lag range in Foxy flips, or holding the first sample back until the
 lag settles, all came out worse (power).
+
+### Does Foxy's timer fall behind too? Yes, like the others
+
+New tool `tools/measure_foxy_lag.py`: Custom Night 0/0/20/20, left door
+shut all night. For the first 100 s the camera is up for most of every
+cycle (to build up the timers' lag); after that it stays down so Foxy can
+advance and bang on the door. Chica's ticks come from the right hall light
+as before; Foxy's from his bangs - the power drops on the very frame
+(event [324]), 1501 frames after the tick that took him to stage 3.
+
+| bang (real s) | power | Foxy's stage-3 tick | offset from k x 5.01 | Chica's lag then |
+|---|---|---|---|---|
+| 135.5 | 58 -> 57 % (1st: -1 %) | 110.47 s | +0.25 | +0.25 .. +0.30 |
+| 170.5 | 48 -> 42 % (2nd: -6 %) | 145.50 s | +0.21 | +0.27 .. +0.30 |
+| 205.5 | 32 -> 21 % (3rd: -11 %) | 180.52 s | +0.16 | +0.29 .. +0.31 |
+
+(The other power "drops" in the raw output are HUD misreads - 97 % read
+as 7 % - or noise while the camera was up.) Foxy's quiet-night phase was
+about -0.1 s, so his lag here is +0.26 .. +0.35 s: the same as Chica's.
+One shared lag for every "every N seconds" timer is what the brain already
+assumes, so Foxy's ticks were not early on live #9 - that loss is still
+not explained by the timing model; the likeliest reading is a lag much
+larger than on the measurement nights (4/20 loads far more) that the bot
+had no sample of.
