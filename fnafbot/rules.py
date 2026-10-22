@@ -32,7 +32,9 @@ TICK_SECONDS = 1.0065
 # offset. The brain converts movement ticks with the measured scale (see
 # Brain._next_tick); each timer's phase is listed here, a little on the
 # early side so that errors fall on the safe side. Foxy's is unmeasured.
-TICK_PHASE = {"bonnie": 0.4, "chica": 0.0, "foxy": 0.0}
+# Measured against the bot's HUD-based night start: Bonnie +0.44..+0.62 s,
+# Chica +0.59..+0.79 s (tools/measure_ticks.py, 2026-10-22). Foxy unmeasured.
+TICK_PHASE = {"bonnie": 0.5, "chica": 0.6, "foxy": 0.0}
 
 FIRST_HOUR_SECONDS = 90        # 12 AM lasts 90 s ...
 HOUR_SECONDS = 89              # ... every later hour 89 s

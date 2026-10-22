@@ -407,6 +407,10 @@ class RealBody:
         log.info("doorway %s: no lit frame (light did not come on?)", side)
         return False, False
 
+    def snapshot(self, label: str) -> None:
+        """Save the current screen as evidence (e.g. when a click was lost)."""
+        self._save_evidence(self.ctl.window.grab(), label)
+
     def _save_evidence(self, frame: np.ndarray, label: str) -> None:
         """Keep a small copy of the frame a decision was based on."""
         try:

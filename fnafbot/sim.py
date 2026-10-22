@@ -474,6 +474,9 @@ class SimBody:
         self.advance(READ_SECONDS)
         return self.sim.light[side]
 
+    def snapshot(self, label: str) -> None:
+        """Nothing to save in the simulator."""
+
     def door_state(self, side: str) -> str | None:
         """The door button's lamp: 'closed' from the moment a closing click
         is accepted (the simulator never loses clicks, but the brain checks).

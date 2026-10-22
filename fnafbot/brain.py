@@ -51,7 +51,7 @@ CLOCK_MARGIN = 0.1
 # can be off by CLOCK_MARGIN and the game fires the tick on a whole frame.
 # A door reopened on the very frame of their tick lets them in (the move
 # simply waits for the door animation to finish), so this must be generous.
-TICK_SETTLE = 0.3
+TICK_SETTLE = 0.65
 
 # Clicks are ignored for 10 frames after a door/light click.
 BUTTON_COOLDOWN = 0.19
@@ -121,7 +121,7 @@ JIT_DOORS = True
 # click delay (one frame), and - should the game miss the click - reading
 # the button's lamp (0.05 s) plus one click cooldown (0.19 s) for a second
 # click that still lands before the tick (see _confirm_door_click).
-JIT_MIN_LEAD = 0.45
+JIT_MIN_LEAD = 0.75
 # Only plan a later close if at least this much time is left to choose from.
 JIT_MIN_SLACK = 0.6
 # Head for a planned click this long before it is needed (on top of the pan
@@ -434,6 +434,7 @@ class Brain:
             if seen is None or seen == wanted:
                 return
             log.warning("%s door click was lost (button still %s) - clicking again", watch.side, seen)
+            self.body.snapshot(f"lost_click_{watch.side}")
             self.body.wait_until(max(self.body.now(), self.last_press_at + BUTTON_COOLDOWN))
             self._press("door", watch.side)
 
