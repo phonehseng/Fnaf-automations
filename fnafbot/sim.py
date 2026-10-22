@@ -414,7 +414,7 @@ class SimBody:
         self._error = clock_error
         # In the simulator every timer runs on the same frame clock.
         self.scale = 1.0
-        self.tick_phase = 0.0
+        self.tick_phases: dict[str, float] = {}
 
     # -- time
     def _clock_error(self) -> float:

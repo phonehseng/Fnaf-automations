@@ -26,12 +26,13 @@ TICK_SECONDS = 1.0065
 
 # The animatronics' movement timers do NOT stretch like the power timer:
 # measured live (tools/measure_ticks.py), Bonnie's room changes land at
-# ANIM_TICK_PHASE + k * 4.97 REAL seconds after the night start, with no
-# drift, while the power readout drops every 1.0065 real seconds. So the
-# brain converts movement ticks with the measured scale (see
-# Brain._next_tick). The phase is measured at ~0.5 s; a little less is
-# assumed so that errors fall on the safe (early) side.
-ANIM_TICK_PHASE = 0.4
+# 0.5 + k * 4.97 REAL seconds after the night start, with no drift, while
+# the power readout drops every 1.0065 real seconds. Chica walked in on a
+# click made 0.05 s after k * 4.98 real seconds, so her timer has no such
+# offset. The brain converts movement ticks with the measured scale (see
+# Brain._next_tick); each timer's phase is listed here, a little on the
+# early side so that errors fall on the safe side. Foxy's is unmeasured.
+TICK_PHASE = {"bonnie": 0.4, "chica": 0.0, "foxy": 0.0}
 
 FIRST_HOUR_SECONDS = 90        # 12 AM lasts 90 s ...
 HOUR_SECONDS = 89              # ... every later hour 89 s
@@ -43,6 +44,7 @@ CHICA_TICK = 4.98
 FREDDY_TICK = 3.02
 FOXY_TICK = 5.01
 POWER_TICK = 1.0               # power is charged only at these instants
+TICK_PERIOD = {"bonnie": BONNIE_TICK, "chica": CHICA_TICK, "foxy": FOXY_TICK}
 
 # ---------------------------------------------------------------------------
 # Power (in tenths of a percent: 999 = 99.9 %)

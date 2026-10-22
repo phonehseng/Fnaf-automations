@@ -99,7 +99,7 @@ class RealBody:
         self.t0 = 0.0                       # perf_counter() at the night's first frame
         self.t0_upper_bound = 0.0           # best proven upper bound on the true night start
         self.scale = rules.TICK_SECONDS     # real seconds per game (power) second
-        self.tick_phase = rules.ANIM_TICK_PHASE   # movement timers: real seconds after the night start
+        self.tick_phases = dict(rules.TICK_PHASE)   # movement timers: real-second offsets after the night start
         self._power_sightings: list[tuple[int, float]] = []   # (tick number, perf_counter seen)
         self._fitted = False                # has the line fit taken over the clock?
         self.six_am_seen = False            # the "6 AM" screen was on display: night won
