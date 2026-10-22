@@ -482,6 +482,15 @@ Where things stand at 08:00: Nights 1-5 won live with zero jumpscares in
 the final runs (Night 3 at 34 %, Night 4 at 8 %, Night 5 at 2 %); the 6th
 Night and 20/20/20/20 run out of power before 6 AM.
 
+Three more 6th Night attempts (07:55 - 08:24) found and fixed three
+scheduling edge cases on the way - the second due door shut too late to
+pan back for the first click; a cove-check flip overrunning a planned
+click because it was planned with the short-flip length; the title's
+static band hiding the "6th Night" entry from a single-frame check - and
+the last attempt reached 420 s with 22 % before a Foxy alert came too
+late. The 6th Night remains open: on the power side (door cycles) and on
+Foxy coverage when both doors are busy.
+
 **Also noted (from the user):** the hall light works with the door shut,
 and on the right side Chica's window is beside the door, so a peek on
 the right may not need the door open at all. The simulator assumes a
