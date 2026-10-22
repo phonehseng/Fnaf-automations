@@ -518,6 +518,15 @@ class SimBody:
     def shown_camera(self) -> str | None:
         return self.sim.viewing
 
+    # In the simulator every timer runs on one clock.
+    @staticmethod
+    def game_to_real(game_t: float) -> float:
+        return game_t
+
+    @staticmethod
+    def real_to_game(real_t: float) -> float:
+        return real_t
+
     def read_camera(self, camera: str) -> dict:
         """What the camera shows: {'occupants': set, 'foxy_stage': int|None,
         'visible': bool}. Freddy is only reported where the real vision can

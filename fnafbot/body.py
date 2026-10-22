@@ -118,6 +118,11 @@ class RealBody:
         self.camera_up_seconds = CAMERA_UP_LIVE
         self._power_sightings: list[tuple[int, float]] = []   # (tick number, perf_counter seen)
         self._fitted = False                # has the line fit taken over the clock?
+        # The animatronics' movement timers run in REAL seconds from the
+        # night's first frame. That origin is fixed once the early power
+        # sightings have refined it; the power clock's own fit (t0, scale)
+        # keeps moving with the game's pace and must not drag it along.
+        self.real_origin = 0.0
         self.six_am_seen = False            # the "6 AM" screen was on display: night won
         self.power_logged_at = -1e9         # night time of the last power trace line
         self.last_hud_seen = 0.0
@@ -142,6 +147,7 @@ class RealBody:
             frame = self.ctl.window.grab()
             if self.vision.hud_visible(frame):
                 self.t0 = time.perf_counter() - CAPTURE_LATENCY
+                self.real_origin = self.t0
                 self.t0_upper_bound = self.t0 + CAPTURE_LATENCY
                 self.last_hud_seen = time.perf_counter()
                 log.info("Night started (clock running)")
@@ -152,9 +158,19 @@ class RealBody:
         """Start the clock from an already-detected first HUD frame
         (``first_hud_frame`` is a time.perf_counter() value)."""
         self.t0 = first_hud_frame
+        self.real_origin = first_hud_frame
         self.t0_upper_bound = first_hud_frame + CAPTURE_LATENCY
         self.last_hud_seen = time.perf_counter()
         log.info("Night started (clock running)")
+
+    def game_to_real(self, game_t: float) -> float:
+        """Night time in the brain's (power) clock -> real seconds since the
+        night's first frame."""
+        return self.t0 + game_t * self.scale - self.real_origin
+
+    def real_to_game(self, real_t: float) -> float:
+        """Real seconds since the night's first frame -> the brain's clock."""
+        return (self.real_origin + real_t - self.t0) / self.scale
 
     def now(self) -> float:
         """Night time in GAME seconds (what every rule in rules.py counts in)."""
@@ -189,6 +205,7 @@ class RealBody:
             if abs(elapsed - k * self.scale) < 0.08 + gap and bound < self.t0_upper_bound:
                 self.t0_upper_bound = bound
                 self.t0 = bound - gap / 2
+                self.real_origin = self.t0      # early in the night both clocks agree
         self._power_sightings.append((k, seen_at - gap / 2))   # best guess: mid-gap
         self._refit_clock()
 

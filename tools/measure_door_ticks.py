@@ -34,6 +34,9 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--who", choices=("bonnie", "chica"), required=True)
     parser.add_argument("--seconds", type=float, default=240.0)
+    parser.add_argument("--camera", action="store_true",
+                        help="raise the camera between their ticks (slows the game clock) to test "
+                             "whether their timers slow down with it")
     args = parser.parse_args()
     side = LEFT if args.who == "bonnie" else RIGHT
     light = layout.LEFT_LIGHT_BUTTON if side == LEFT else layout.RIGHT_LIGHT_BUTTON
@@ -53,18 +56,30 @@ def main() -> None:
     def lamp_on() -> bool:
         return vision.light_lamp_on(window.grab(), side)
 
-    events: list[tuple[float, str]] = []
+    events: list[tuple[float, float, str]] = []    # (game seconds, real seconds, what)
     door_shut = False
     ctl.press(light)
     end = time.monotonic() + args.seconds
     while time.monotonic() < end and not body.night_over():
         body.wait_until(body.now() + 0.005)
+        if args.camera:
+            # Raise the camera while their next tick (either model) is far
+            # away: the camera's static makes the game drop frames.
+            to_next = period - ((time.perf_counter() - body.real_origin) % period)
+            if 1.4 < to_next < period - 0.6:
+                ctl.camera_up()
+                time.sleep(max(0.0, to_next - 1.2))
+                ctl.camera_down()
+                ctl.face(side)
+                ctl.press(light)
+                continue
         if lamp_on():
             continue
         # The light went off by itself: a tick of theirs just happened.
         t = body.now()
+        real_t = time.perf_counter() - body.real_origin   # the fixed origin the brain uses
         what = "left the door" if door_shut else "arrived"
-        events.append((t, what))
+        events.append((t, real_t, what))
         print(f"{t:8.3f} s  {args.who} {what}", flush=True)
         time.sleep(0.3)
         if not door_shut:
@@ -78,16 +93,20 @@ def main() -> None:
         ctl.press(light)
         time.sleep(0.3)
 
-    print(f"\nclock: game second = {body.scale:.4f} real s; {len(events)} ticks seen")
-    phases = []
-    for t, what in events:
-        real = t * body.scale
-        k = round(real / period)
-        phases.append(real - k * period)
-        print(f"  {real:8.3f} real s  {what:14s} tick {k:3d} {real - k * period:+.3f} s")
-    if phases:
-        print(f"\nphase: min {min(phases):+.3f}  mean {sum(phases) / len(phases):+.3f}  "
-              f"max {max(phases):+.3f} s  (seen up to one look, ~0.02 s, after the tick)")
+    print(f"\nclock: game second = {body.scale:.4f} real s at the end; {len(events)} ticks seen")
+    print(f"{'game s':>9} {'real s':>9}  {'event':14s} {'real-time model':>18} {'game-time model':>18}")
+    real_res, game_res = [], []
+    for t, real_t, what in events:
+        kr = round(real_t / period)
+        kg = round(t / period)
+        real_res.append(real_t - kr * period)
+        game_res.append(t - kg * period)
+        print(f"{t:9.3f} {real_t:9.3f}  {what:14s} {kr:4d} {real_res[-1]:+8.3f} s   {kg:4d} {game_res[-1]:+8.3f} s")
+    for name, res in (("real-time", real_res), ("game-time", game_res)):
+        if res:
+            print(f"{name} model: offsets {min(res):+.3f} .. {max(res):+.3f} s (spread {max(res) - min(res):.3f})")
+    print("The model whose offsets stay put (no drift with time) is how their timer runs;"
+          " each tick is seen up to one look (~0.02 s) late.")
 
 
 if __name__ == "__main__":

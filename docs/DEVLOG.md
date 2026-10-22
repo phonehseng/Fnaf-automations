@@ -690,3 +690,28 @@ every later "hold on 4B" flip. Not proven, so two cheap guards went in:
 every camera switch is verified on screen (and retried), and after every
 flip-up the room label is read and the monitor switched to 4B if needed,
 with a warning in the log - the next run will show whether it happens.
+
+### Live 4/20 #6 (15:31): lost at ~278 s - the reference point was moving
+
+Same symptoms as #5 (the monitor refused to come up at 277 s - in the
+game's rules only Freddy or an attacking Foxy do that), and Foxy had been
+seen only once all night, at 20 s, with every tick counted as covered.
+
+`tools/measure_door_ticks.py --camera` settled the timer question: same
+hall-light timestamps, but with the camera raised between Bonnie's ticks
+so the game clock slows down. Against real time his ticks stayed within
+0.24 s; against the game (power) clock they drifted by over a second. So
+the movement timers do run in real seconds. But the "real seconds" were
+counted from `t0`, the night start re-fitted from the power readout all
+night - and on camera-heavy nights the power clock's pace changes, so the
+fit kept moving that origin by tenths of a second. Every Foxy flip and
+every door click was placed relative to a moving reference.
+
+Fix: the body keeps a fixed `real_origin` (the night's first frame,
+refined only by the earliest power sightings, while both clocks still
+agree); movement ticks are computed in real seconds from it and converted
+to the brain's clock with `game_to_real` / `real_to_game`. Measured again
+(Chica, camera-heavy): offsets +0.114, +0.131, +0.132, +0.134 s - flat.
+
+Also from #6: a "certainly sent back" (AI 20) is now verified with one light
+check before their next tick instead of trusted outright.

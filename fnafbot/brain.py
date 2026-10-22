@@ -195,6 +195,7 @@ class DoorWatch:
     moving_until: float = 0.0      # the door's open/close animation ends at this time
     reopen_after: float = 0.0      # a reopen that found no closing slot waits until here
     looked_while_open: bool = True # after a blind reopen: has the light been flashed yet?
+    verify_departure: bool = False # a "certainly sent back" still to be checked with a look
 
 
 @dataclass
@@ -313,19 +314,25 @@ class Brain:
     # nights - docs/DEVLOG.md.
 
     def _timer(self, who: str) -> tuple[float, float]:
-        """(period, phase) of ``who``'s movement timer in the brain's clock."""
-        return (rules.TICK_PERIOD[who] / self.body.scale,
-                self.body.tick_phases.get(who, 0.0) / self.body.scale)
+        """(period, phase) of ``who``'s movement timer, in REAL seconds."""
+        return rules.TICK_PERIOD[who], self.body.tick_phases.get(who, 0.0)
 
     def _next_tick(self, who: str, after: float) -> float:
-        """The first tick of ``who``'s timer strictly after night time ``after``."""
+        """The first tick of ``who``'s timer strictly after night time ``after``.
+
+        Their timers run in real seconds from the night's first frame
+        (measured: tools/measure_door_ticks.py --camera), so the question is
+        answered in real time and converted to and from the brain's clock -
+        whose pace changes with camera use - by the body."""
         period, phase = self._timer(who)
-        return rules.next_tick(period, after - phase) + phase
+        after_real = self.body.game_to_real(after)
+        return self.body.real_to_game(rules.next_tick(period, after_real - phase) + phase)
 
     def _tick_times(self, who: str, start: float, end: float) -> list[float]:
         """All ticks of ``who``'s timer inside [start, end)."""
         period, phase = self._timer(who)
-        return [t + phase for t in rules.tick_times(period, start - phase, end - phase)]
+        lo, hi = self.body.game_to_real(start), self.body.game_to_real(end)
+        return [self.body.real_to_game(t + phase) for t in rules.tick_times(period, lo - phase, hi - phase)]
 
     def _tick_after(self, watch: DoorWatch, now: float) -> float:
         """Their next tick as far as the bot can be sure: a tick less than
@@ -386,8 +393,15 @@ class Brain:
                     # Bonnie in on simulated 4/20 nights.)
                     since = self._tick_times(watch.who, watch.seen_at_door_at, tick + 1e-6)
                     watch.at_door = False
-                    watch.checked_since_tick = True
                     watch.min_moves = max(0, watch.distance[watch.repelled_to] - max(0, len(since) - 1))
+                    # Trust, but verify: look once before their next tick
+                    # (checked_since_tick False + min_moves 0 = a doorway
+                    # check is due). The proof assumes AI exactly 20; the
+                    # Custom Night levels are set by clicking arrows, and a
+                    # lost click (AI 19) makes 1 move in 20 fail - twice a
+                    # "certainly sent back" Bonnie walked in at his next tick.
+                    watch.verify_departure = True
+                    watch.checked_since_tick = False
                     log.info("%.2fs  %s certainly sent back at %.2f s (AI 20, door shut)",
                              now, watch.who.capitalize(), tick)
         # Foxy: every tick of his that no camera flip covered may have moved him.
@@ -443,9 +457,10 @@ class Brain:
         return False
 
     def _door_check_needed(self, watch: DoorWatch) -> bool:
-        """A light check is needed if they could have arrived at the last tick."""
-        return (not watch.at_door and not watch.checked_since_tick and watch.min_moves == 0
-                and not watch.door_closed)
+        """A light check is needed if they could have arrived at the last tick
+        (or a "certainly sent back" is to be verified, see _account_for_ticks)."""
+        return (not watch.at_door and not watch.checked_since_tick and not watch.door_closed
+                and (watch.min_moves == 0 or watch.verify_departure))
 
     def _peek_needed(self, watch: DoorWatch, now: float) -> bool:
         """They were (or may be) at the closed door and one of their ticks has
@@ -814,6 +829,7 @@ class Brain:
             return
         watch.failed_checks = 0
         watch.checked_since_tick = True
+        watch.verify_departure = False
         if present:
             watch.at_door = True
             watch.seen_for_sure = True
