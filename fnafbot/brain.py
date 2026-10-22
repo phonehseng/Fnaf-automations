@@ -486,10 +486,15 @@ class Brain:
         hard = sorted((self._jit_due(w), w) for w in (self.left, self.right) if w.close_at is not None)
         if len(hard) == 2:
             # Both doors are due. If the second click could not follow the
-            # first (cooldown + pan over) in time, shut that door right now.
+            # first (cooldown + pan over) in time, shut that door right now -
+            # but only while there is still time to pan back and make the
+            # first click on schedule. (Shutting the second door 0.2 s before
+            # the first click once made that click 0.4 s late: Bonnie in.)
             (first_due, first), (_, second) = hard
+            room_to_pan_back = (now + self._pan_time(second.side) + BUTTON_COOLDOWN + PAN_SECONDS + 0.15
+                                <= first.close_at)
             if (second.close_at < first.close_at + BUTTON_COOLDOWN + PAN_SECONDS + 0.3
-                    and now >= first_due - 1.0):
+                    and now >= first_due - 1.5 and room_to_pan_back):
                 return lambda w=second: self._close_door(w, reason="two doors due together", after=now)
         for due, watch in hard:
             if now >= due:
