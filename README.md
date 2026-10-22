@@ -123,12 +123,23 @@ python -m pytest tests
 | `fnafbot/brain.py` | The strategy: what to check and when |
 | `fnafbot/sim.py` | Frame-accurate simulator of a night (for testing the brain) |
 | `fnafbot/menu.py` | Starting the game and choosing a night |
-| `fnafbot/overlay.py` | The on-screen status panel |
+| `fnafbot/overlay.py` | The on-screen status panel with the analog night clock |
 | `fnafbot/__main__.py` | Command-line entry point |
-| `tools/` | Simulator runner, loss debugger, calibration helpers |
+| `tools/` | Simulator runner, loss debugger, calibration helpers, `demo_events.py` (stages events for recordings) |
 | `tests/` | Automated tests |
 | `docs/GAME_LOGIC.md` | The game's real rules, read from its code |
 | `docs/STRATEGY.md` | How the bot uses those rules |
+| `docs/DEVLOG.md` | Bugs found on the live game and how they were fixed |
+
+## The status panel
+
+While playing, a small panel at the top of the screen shows what the bot is
+doing, what it believes about each animatronic, and a clock of the night:
+the hour hand sweeps from 12 to 6 over the night, the minute hand makes one
+turn per in-game hour (90 s for 12 AM, 89 s for the others), and a countdown
+says when the next hour lands. The panel never takes focus and clicks pass
+through it. "tick 1.0056s" is the measured length of one game second (see
+`docs/DEVLOG.md` for why that matters).
 
 ## Notes
 
