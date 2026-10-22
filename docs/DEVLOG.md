@@ -449,6 +449,23 @@ lags one more, so an early look can still show the old colour and the
 twice before retrying and gives up after three lost clicks instead of
 clicking blindly.
 
+**6th Night lost (07:31, 26 % power) to exactly such a click.** Bonnie
+seen in the doorway at 375.6 s, the "danger first" door click 0.1 s
+before his tick ignored, the retry after it (he was in by then; the
+button is dead once he is inside). Two theories tested:
+
+* *The game still thinks a camera is up after an early put-down*
+  (`viewing` is set when the flip-up animation finishes, event `[133]`).
+  `tools/measure_flip.py`: 18 of 18 door clicks accepted after put-downs
+  0.3 - 1.3 s after the label appeared. Dead.
+* *The click cooldown.* A door or light click sets a 10-frame cooldown
+  (`[95]`); the bot spaced its clicks 0.19 s apart, i.e. 11.3 frames at
+  the real 16.8 ms frame time - half a frame of margin, and frames are
+  sometimes 35 ms. The "danger first" door click always comes exactly one
+  cooldown after the light click, so it is exactly the click that lands on
+  the edge. Every "light did not come on" retry fits the same picture.
+  Clicks are now spaced 0.26 s (15 frames) apart.
+
 **Also noted (from the user):** the hall light works with the door shut,
 and on the right side Chica's window is beside the door, so a peek on
 the right may not need the door open at all. The simulator assumes a

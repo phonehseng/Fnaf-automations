@@ -397,7 +397,7 @@ CAMERA_SETTLE_SECONDS = 0.12  # static burst after raising/switching (body.CAMER
 COVE_SETTLE_SECONDS = 0.3     # Pirate Cove waits longer (body.CAMERA_SETTLE["1C"])
 CAMERA_READ_SECONDS = 0.08    # 2-3 frames grabbed and classified
 CLICK_SECONDS = 0.03        # move + click
-BUTTON_COOLDOWN = 0.19      # same safety spacing as controller.BUTTON_COOLDOWN
+BUTTON_COOLDOWN = 0.26      # same safety spacing as controller.BUTTON_COOLDOWN
 
 
 class SimBody:

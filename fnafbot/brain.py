@@ -54,7 +54,7 @@ CLOCK_MARGIN = 0.1
 TICK_SETTLE = 0.65
 
 # Clicks are ignored for 10 frames after a door/light click.
-BUTTON_COOLDOWN = 0.19
+BUTTON_COOLDOWN = 0.26     # same as controller.BUTTON_COOLDOWN (see the note there)
 
 # Keep extra power use this far away from each whole-second power charge.
 POWER_TICK_GUARD = 0.08

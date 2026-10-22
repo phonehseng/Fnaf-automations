@@ -54,9 +54,12 @@ CAMERA_FRAMES = 2
 CAMERA_GONE_HOLD = 0.2
 
 # After ANY door or light click the game ignores all door/light clicks for
-# 10 frames (event [95] in docs/GAME_LOGIC.md): 10 / 60 s = 0.167 s. We wait
-# a little longer to be safe against frame-timing jitter.
-BUTTON_COOLDOWN = 0.19
+# 10 frames (event [95] in docs/GAME_LOGIC.md). The frames are 16.8 ms on
+# this machine, so the 11th frame after a click starts at ~0.185 s, and a
+# frame is sometimes 35 ms long: a click spaced 0.19 s after the previous
+# one landed on a frame with the cooldown still running often enough to
+# lose a night (docs/DEVLOG.md). Space clicks by a comfortable 15 frames.
+BUTTON_COOLDOWN = 0.26
 
 
 @dataclass
