@@ -495,3 +495,56 @@ Foxy coverage when both doors are busy.
 and on the right side Chica's window is beside the door, so a peek on
 the right may not need the door open at all. The simulator assumes a
 shut door hides both sides; to verify on the right and exploit (TODO).
+
+---
+
+## 2026-10-22 (afternoon) - Power on busy nights: where the door seconds went
+
+Goal: the 6th Night and 20/20/20/20, which kept running out of battery
+with nobody getting in. New tool: `tools/door_spans.py` plays simulated
+nights and lists every door closure with the brain's reason for it, how
+long it stayed shut and how many power charges that cost. In order of
+discovery:
+
+1. **Blind reopens pushed Foxy flips late.** Letting a reopen run past a
+   planned flip uncovered half of Foxy's ticks, and every uncovered tick
+   ends in an alert that shuts both doors. Reopens may no longer delay a
+   flip; whether a reopen is worth it is now decided by the power charges
+   it saves, not by a fixed window.
+2. **At AI 20 a move never fails** (`Random(20) + 1 <= AI`). Someone seen at
+   a door that was shut through their tick has certainly been sent back,
+   so the door simply opens. (The first version counted from the wrong
+   tick and was one move optimistic - the simulator caught it at once:
+   moves are now counted from the earliest tick at which they could have
+   been sent back.)
+3. **A Foxy alert let an urgent light check jump a planned door click.**
+   Fixed: the planned door is shut first.
+4. **Chica can be checked with the right door SHUT.** Pointed out by the
+   user and verified live (`tools/check_shut_window.py`): the window is
+   beside the door and reads "empty, margin 6.1" exactly as with the door
+   open, while the left door hides Bonnie's doorway completely (margin
+   0.2, untrusted). Chica's "has she left?" check is now a window look -
+   no door cycle at all.
+5. **Doors shut on nobody stayed shut.** After a window look found Chica
+   gone, nothing reopened the door. Opening a door nobody is at is always
+   safe (an arrival at an OPEN door only gets in on the NEXT move, and the
+   normal check catches it), so the scheduler now does.
+6. **An unseen Bonnie kept the left door shut for minutes** (one closure
+   lasted 194 s). After a Foxy alert nobody knows where Bonnie is, and a
+   full peek - open, look, maybe shut - needed a ~2 s gap that most
+   cycles never have, because Bonnie's, Chica's and Foxy's ticks run
+   nearly in step (4.97 / 4.98 / 5.01 s). The peek is now split: reopen
+   blind right after his tick with a just-in-time closing click planned,
+   then flash the light in any later gap; if he has gone, the click is
+   cancelled.
+
+Result, 100 fresh simulated nights each (wandering clock on):
+
+| night | before (morning) | now |
+|---|---|---|
+| 4 | 30/30, ~12 % | 100/100, 18.6 % |
+| 5 | 18-22/30, ~8 % | 98/100, 12.8 % |
+| 6th | 1-11/20, ~2 % | 100/100, 12.7 % |
+| 20/20/20/20 | 5-8/30, ~3 % | 99/100, 13.3 % |
+
+No break-ins in 700 nights; the three losses are the battery.
