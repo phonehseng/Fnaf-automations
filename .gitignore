@@ -162,3 +162,9 @@ cython_debug/
 
 logs/
 fnafvenv/
+
+# FNAF bot: game pictures extracted from your own install, and run logs
+cache/
+logs/
+Logs/
+temp/

@@ -1,0 +1,7 @@
+# Screen capture, image matching and Windows input for the FNAF bot.
+opencv-python>=4.9
+numpy>=1.26
+mss>=10.0
+pywin32>=306
+keyboard>=0.13      # global stop hotkey (F8)
+pytest>=8.0         # only needed to run the tests
