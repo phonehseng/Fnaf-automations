@@ -501,7 +501,11 @@ class Brain:
         for watch in (self.left, self.right):
             if self._door_check_needed(watch):
                 deadline = self._tick_after(watch, now) - CHECK_DEADLINE_LEAD
-                estimate = self._pan_time(watch.side) + LIGHT_CHECK_SECONDS + 0.25
+                # Pan, wait for a quiet moment, light on, look, light off
+                # (after the click cooldown). An optimistic estimate here
+                # makes the next Foxy flip late, and a late flip does not
+                # cover his tick.
+                estimate = self._pan_time(watch.side) + LIGHT_CHECK_SECONDS + BUTTON_COOLDOWN + 0.4
                 checks.append((deadline, estimate, watch))
         for deadline, estimate, watch in sorted(checks, key=lambda c: c[0]):
             job = lambda w=watch: self._check_doorway(w)
@@ -816,7 +820,9 @@ class Brain:
             view_end = tick - gap
             view_start = view_end - view
             if self.power_safe(view_start, view) and gap <= FREEZE_LATEST_GAP:
+                self._freeze_view_end = view_end
                 return view_start - rules.CAMERA_UP_SECONDS
+        self._freeze_view_end = tick - 0.25
         return tick - 0.25 - view - rules.CAMERA_UP_SECONDS
 
 
@@ -845,6 +851,9 @@ class Brain:
         # Record when a picture was showing; Foxy's lock is judged from this.
         self.view_intervals.append((self._view_started, self.body.now()))
         self.view_intervals = self.view_intervals[-8:]
+        tick = self._next_tick(rules.FOXY_TICK, self._view_started)
+        log.info("camera view %.2f-%.2f s; Foxy tick at %.2f %s", self._view_started, self.body.now(), tick,
+                 "covered" if self._foxy_tick_covered(tick) else "NOT covered")
         self.body.camera_down()
 
     def _read_4b(self) -> bool:
@@ -893,26 +902,34 @@ class Brain:
         stage = None
         if cove_check and self._read_4b():
             stage = self._look_at_cove()
-        else:
-            # A plain flip only has to be up while one of the game's 0.1 s
-            # re-lock instants passes; every extra moment risks a power
-            # charge. But the re-lock must also be close enough to the tick
-            # (the lock lasts at least 0.833 s), so if the camera went up
-            # early - for a cove check that 4B then forbade - stay up until
-            # a re-lock instant that still protects the tick.
-            # The game only counts the picture as "viewing" once its flip-up
-            # animation has finished, and the clock may be off by a few
-            # hundredths, so the picture is held for a full
-            # FREEZE_VIEW_SECONDS at the very least (a hold of ~0.1 s once
-            # let Foxy reach stage 3 unseen - docs/DEVLOG.md).
-            first_relock = math.floor((self._view_started + FOXY_CLOCK_MARGIN) * 10 + 1) / 10
-            min_lock = rules.FOXY_LOCK_MIN_FRAMES * rules.FRAME
-            covering_relock = math.ceil((tick - (min_lock - FOXY_CLOCK_MARGIN)) * 10 - 1e-9) / 10
-            self.body.wait_until(max(self.body.now(), self._view_started + FREEZE_VIEW_SECONDS,
-                                     max(first_relock, covering_relock) + FOXY_CLOCK_MARGIN))
+        # Whatever was done up there, the picture must stay up long enough
+        # to freeze Foxy for this tick (a cove check that finished early
+        # once left half of all ticks uncovered in the simulator).
+        self.body.wait_until(self._hold_until(tick))
         self._lower_camera()
         if stage is not None:
             self._after_cove_check(stage)
+
+    def _hold_until(self, tick: float) -> float:
+        """How long the camera picture must stay up to protect Foxy's ``tick``.
+
+        The game re-rolls Foxy's lock only at its 0.1 s instants while a
+        picture is "viewing" - which starts when the flip-up animation has
+        finished - and the lock then lasts at least 0.833 s. So the picture
+        must cover a re-lock instant close enough to the tick, through the
+        NEXT instant as well (one instant exactly on the margin is not
+        enough), never shorter than FREEZE_VIEW_SECONDS (the clock may be
+        off by a few hundredths; a ~0.1 s hold once let Foxy reach stage 3
+        unseen - docs/DEVLOG.md), and never shorter than the power-safe
+        view that was planned."""
+        first_relock = math.floor((self._view_started + FOXY_CLOCK_MARGIN) * 10 + 1) / 10
+        min_lock = rules.FOXY_LOCK_MIN_FRAMES * rules.FRAME
+        covering_relock = math.ceil((tick - (min_lock - FOXY_CLOCK_MARGIN)) * 10 - 1e-9) / 10
+        planned_end = getattr(self, "_freeze_view_end", 0.0)
+        if not (self._view_started < planned_end < tick):
+            planned_end = 0.0
+        return max(self.body.now(), self._view_started + FREEZE_VIEW_SECONDS, planned_end,
+                   max(first_relock, covering_relock) + 0.1 + FOXY_CLOCK_MARGIN)
 
     def _cove_check_due(self) -> bool:
         """Look at Pirate Cove on this flip? Only when it is worth the time:
