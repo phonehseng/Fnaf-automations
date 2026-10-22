@@ -47,6 +47,8 @@ CUSTOM_READY = (1141, 656)
 # which the game ignores. Alternating between two spots this far apart
 # (still inside the arrow button) keeps every click a single click.
 ARROW_CLICK_JITTER = 12
+# Extra arrow clicks at the 0 and 20 ends of the scale (see set_custom_levels).
+ARROW_SPARE_CLICKS = 5
 
 # The easter-egg combination that skips the night (see docs/GAME_LOGIC.md).
 FORBIDDEN_CUSTOM_LEVELS = {"freddy": 1, "bonnie": 9, "chica": 8, "foxy": 7}
@@ -188,12 +190,19 @@ def set_custom_levels(mouse: Mouse, levels: dict[str, int]) -> None:
     """On the Custom Night screen, click arrows until each AI level matches.
 
     The game remembers the levels between visits, so we first click the left
-    arrow 20 times (reaching 0 from anywhere) and then the right arrow
+    arrow enough times to reach 0 from anywhere, then the right arrow
     ``level`` times. Arrow buttons have no click cooldown.
+
+    The levels stop at 0 and 20, so extra clicks there are harmless - and
+    they make a lost click harmless too: a single lost arrow click used to
+    leave an animatronic at 19 (one move in twenty then fails, which looks
+    exactly like the "stayed at the shut door through a tick" seen on live
+    4/20 nights). So both ends get ARROW_SPARE_CLICKS extra.
     """
     for name, level in levels.items():
         left, right = CUSTOM_ARROWS[name]
-        for button, count in ((left, 20), (right, level)):
+        right_count = level + ARROW_SPARE_CLICKS if level >= 20 else level
+        for button, count in ((left, 20 + ARROW_SPARE_CLICKS), (right, right_count)):
             for i in range(count):
                 offset = ARROW_CLICK_JITTER if i % 2 else -ARROW_CLICK_JITTER
                 mouse.click(button[0], button[1] + offset)

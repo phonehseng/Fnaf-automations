@@ -942,3 +942,21 @@ before their closing click - open, shut, open, shut, light never on. Fixes:
 Simulator (40 nights each, nobody got in on any of them): 4/20 30/40
 (5.9 % left), 6th Night 36/40 (6.7 %), Night 5 36/40 (10.1 %); every loss
 a power-out.
+
+### Live 4/20 #11 (19:35): Bonnie at ~79 s
+
+Over in 80 seconds. Bonnie was seen in the doorway at 75.3 s; the bot
+planned the door for 78.46 s, before his move at 78.96 s on its model -
+and the game ignored the click three times (cursor on the red DOOR button
+in the OBS frames, door fully open and idle). Event [96] refuses a door
+click while Bonnie is already inside, and the jumpscare came as soon as
+the next camera flip came down - so he was most likely in by 78.5 s. That
+needs his tick to have come at least ~1.3 s later than the model already
+at 75 s into the night: far more lag than any measurement night showed at
+that point (~0.5 s). No lag sample had been taken yet.
+
+Also: at 55-56 s Bonnie stayed at the shut door through a tick, which at
+AI 20 cannot happen (and Chica did the same on #7). The Custom Night
+levels are set by clicking arrows 20 + 20 times with no check; a lost
+click leaves 19. The arrows stop at 0 and 20, so they now get 5 spare
+clicks at each end - a lost click can no longer matter.
