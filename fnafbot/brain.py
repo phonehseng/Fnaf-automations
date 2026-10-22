@@ -84,6 +84,9 @@ FREEZE_LATEST_GAP = 0.833 - 0.1 - CLOCK_MARGIN
 
 # Re-check Pirate Cove (only when it is safe) at least this often.
 FOXY_VERIFY_EVERY = 30.0
+# After someone was seen on 4B, assume it stays blocked this long before
+# planning another routine cove check.
+FOUR_B_BUSY_SECONDS = 10.0
 # Roughly how long a Foxy alert (shut the left door, look at the cove, maybe
 # shut the right door first) keeps the bot busy; used to let an urgent
 # doorway check go first.
@@ -184,6 +187,7 @@ class Brain:
         self.foxy_emergency = False        # Foxy left the cove: left door must stay shut
         self.foxy_door_hold = False        # left door shut until we have looked at the cove
         self.foxy_alert_retry_at = 0.0     # earliest time for another Foxy alert attempt
+        self.four_b_busy_at = -1e9         # when 4B was last seen occupied (blocks cove checks)
         self.view_intervals: list[tuple[float, float]] = []   # when a camera picture showed
         self._view_started = 0.0           # when the current camera picture appeared
 
@@ -728,6 +732,8 @@ class Brain:
         if not view["visible"]:
             return False
         self.freddy_at_4b = "F" in view["occupants"]
+        if view["occupants"]:
+            self.four_b_busy_at = self.body.now()
         return not view["occupants"]
 
     def _look_at_cove(self) -> int | None:
@@ -785,8 +791,13 @@ class Brain:
         Foxy may have moved since we last saw him (an uncovered tick), or it
         has been a while. A Foxy who was SEEN at stage 2 and whose every tick
         since was covered is still at stage 2 - no need to keep looking."""
-        return (self.foxy_max_stage > self.foxy_stage
-                or self.body.now() - self.foxy_verified_at > FOXY_VERIFY_EVERY)
+        must = self.foxy_max_stage > self.foxy_stage
+        overdue = self.body.now() - self.foxy_verified_at > FOXY_VERIFY_EVERY
+        # A routine re-check needs 4B clear first (Freddy's rule). While
+        # somebody was just seen on 4B it would only make every flip long -
+        # and a long flip usually spans a power charge - for nothing.
+        four_b_blocked = self.body.now() - self.four_b_busy_at < FOUR_B_BUSY_SECONDS
+        return must or (overdue and not four_b_blocked)
 
     def _foxy_alert(self) -> None:
         """Foxy may have left the cove (some of his ticks were not covered).

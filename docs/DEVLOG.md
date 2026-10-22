@@ -182,3 +182,23 @@ screens a missing HUD is normal.
 after Bonnie's tick (two "light did not come on" retries in this night,
 both 0.5 s after one of his ticks, both followed by a normal reading).
 The retry costs half a second; the door shuts if his next tick is close.
+
+---
+
+## 2026-10-22 - Simulator: where the 4/20 power went (8 % -> 17 % left)
+
+With the real action durations in the simulator, 20/20/20/20 nights ended
+with ~8 % power and the occasional blackout. `tools/power_report.py` now
+also counts the brain's own announcements per night, which made the cause
+obvious: **101 "Camera flip: checking Foxy" per night, 6 plain flips.**
+
+A cove check is only allowed when 4B is empty (Freddy's rule), and on
+4/20 Freddy or Chica is on 4B most of the time. So every flip was
+*planned* as a long cove check (1 s of camera, which almost always spans
+a power charge), then found 4B occupied, skipped the cove, and the next
+flip was planned long again because Foxy was still "unverified".
+
+Fix: remember when 4B was last seen occupied and do not plan a routine
+cove check for the next 10 s (`FOUR_B_BUSY_SECONDS`); only an uncovered
+Foxy tick forces one. Result on 100 simulated 4/20 nights: 100 survived,
+17.3 % power left on average (was 8.0 % and 99/100).
