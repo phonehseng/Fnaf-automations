@@ -31,3 +31,13 @@ def test_looks_shifted():
 
     black = np.zeros((720, 1280, 3), np.uint8)   # e.g. the 6 AM screen
     assert not looks_shifted(black)
+
+    # The other way round (seen live 2026-10-22): black bands right and bottom.
+    shifted_other = normal.copy()
+    shifted_other[600:, :] = 0
+    shifted_other[:, 1066:] = 0
+    assert looks_shifted(shifted_other)
+
+    six_am = black.copy()                        # white text in the middle only
+    six_am[300:380, 560:740] = 255
+    assert not looks_shifted(six_am)

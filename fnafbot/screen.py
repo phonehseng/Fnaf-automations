@@ -209,11 +209,14 @@ class GameWindow:
 
 
 def looks_shifted(frame: np.ndarray) -> bool:
-    """The broken "quarter" state: the game draws its picture shifted by
-    (320, 180), so the top-left 310 x 170 pixels are pure black while the
-    rest of the screen has content. A real office or camera view never has a
-    pure-black top-left corner like that (and fully black screens such as
-    6 AM are not reported, because they have no content elsewhere either)."""
-    corner_black = int(frame[:170, :310].max()) <= 6
-    has_content = float(frame[180:, 320:].mean()) > 12
-    return corner_black and has_content
+    """The broken "shifted" states after a minimise/restore: the game draws
+    its picture offset, leaving a pure-black band along one or two edges
+    (seen live: shifted by (320, 180) with the top-left black, and shifted
+    the other way with the right and bottom black) while the rest of the
+    screen has content. A real office or camera view fills the screen, and
+    fully black screens such as the 6 AM fade are not reported because they
+    have no content elsewhere either."""
+    edges = (frame[:170, :310], frame[:100, :], frame[-100:, :], frame[:, :120], frame[:, -120:])
+    band_black = any(int(edge.max()) <= 6 for edge in edges)
+    has_content = float(frame[180:600, 320:1100].mean()) > 12
+    return band_black and has_content
