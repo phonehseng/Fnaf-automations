@@ -1279,3 +1279,21 @@ bangs, each resetting the bot's picture of Foxy. Stopped the night. Now
 only a drop of 4 % or more in one reading counts (his bangs cost 1, 6, 11
 ... %): his first bang of the night is not measured, the later ones are.
 Simulator: 4/20 60/60 (13.4 %), 6th Night 57/60.
+
+### Live 4/20 #25: WON - 6 AM at 533 s, 0 % power, no jumpscares
+
+The first live 4/20 win, on OBS (recording "2026-10-22 19-09-19.mkv", the
+night starting at 23:39:55). The power ledger, every 30 s:
+
+```
+ 30 s  95 %   122 s  79 %   212 s  60 %   302 s  44 %
+393 s  27 %   484 s   8 %   514 s   3 %   533 s  6 AM
+```
+
+Foxy never ran: six "Foxy might be out" alerts (uncovered ticks), each
+checked at the cove with the left door shut a few seconds, and every flip
+afterwards on his paused-timer phase. The left door was shut 74 s in all,
+the right 38 s, the camera up 59 s. The margin was a few seconds of power -
+the run-to-run spread is still large, so the next work is making the win
+repeatable: fewer Foxy alerts (each costs a door cycle and a cove look) and
+less left-door time when Bonnie's schedule conflicts.
