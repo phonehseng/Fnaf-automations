@@ -141,7 +141,7 @@ python -m pytest tests
 | 4 | won | 8 % |
 | 5 | won | 2 % |
 | 6th Night | won (with the last percent of power) | 0 % |
-| 20/20/20/20 | won on live attempt #25 (with the last percent of power) | 0 % |
+| 20/20/20/20 | won (live #25 with 0 %, #28 with 11 % after the clock fixes) | 11 % |
 
 Every lost night on the way is written up in [docs/DEVLOG.md](docs/DEVLOG.md):
 what the log showed, what the game's own code says, the measurement that

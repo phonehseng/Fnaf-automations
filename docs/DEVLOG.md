@@ -1362,3 +1362,18 @@ Now, for the first 60 s, a power change is matched to the charge up to
 the median of all sightings so far with no step limit, and the movement
 timers' origin follows it. Test: a start noticed 0.4 or 0.6 s late is
 corrected at the first power change, the origin to within 0.04 s.
+
+### Live 4/20 #28: WON with 11 % (the clock fixes)
+
+The first night with the clock reading its start from the power changes
+(it had noticed the start 0.33 s late again; corrected at the first
+change, ~7 s in) and fitting the game second (0.9995 real s):
+
+```
+ 30 s 95 %   122 s 80 %   213 s 65 %   304 s 49 %
+394 s 35 %   486 s 20 %   516 s 15 %   536 s 6 AM - 11 % left
+```
+
+5 % ahead of #25 at 3 AM and 12 % ahead at 5 AM. Left door 49 s in all
+(#25: 74 s), right 32 s, camera 54 s; 3 Foxy alerts (#25: 6), no runs.
+One win is not "repeatable" yet - more nights follow.
