@@ -1446,3 +1446,22 @@ deadline, the one that makes the flip least late goes first.
 
 Other nights unchanged (60 each): 6th Night 57/60, Night 5 59/60, Night 4
 59/60.
+
+### Second clean series (campaign58 - 62): 3 of 5
+
+| night | result | notes |
+|---|---|---|
+| campaign58 | lost at ~45 s, 91 % | lights and monitor dead by 44.7 s - someone was in; not on video (see below) |
+| campaign59 | lost, out of power at ~525 s | left door 130 s: 50 s "before camera flip" (4 - 16 s on earlier nights) |
+| campaign60 | won, 7 % | |
+| campaign61 | won, 5 % | `FLIP_DOOR_SLACK` back to 0.15 s from here |
+| campaign62 | won, 4 % | |
+
+Over both clean series: 7 of 10. The live Foxy numbers did not follow the
+simulator (campaign59: 24 uncovered ticks, 11 alerts, where the simulator
+now predicts ~8 and ~3.5), and the 0.4 s door slack cost far more left-door
+time live than in the simulator - reverted.
+
+OBS stopped recording at 02:06:48 (the process vanished, no orderly stop in
+its log), so this whole series is missing from the footage - including the
+one early loss. The series runner now (re)starts OBS before every night.
