@@ -108,6 +108,8 @@ def narrate(action: str, notes: dict[str, str] | None = None) -> str:
         return f"Foxy's still in Pirate Cove ({mood})"
     if a.startswith("Pirate Cove unreadable"):
         return "Can't see Pirate Cove! Is Foxy out?!"
+    if a.startswith("Foxy might be out - looking"):
+        return "Uh oh - Foxy might be out! Taking a quick look at Pirate Cove"
     if a.startswith("Foxy might be out"):
         return "Uh oh - Foxy might be out! Left door shut while I check"
     if a.startswith("FOXY LEFT THE COVE"):

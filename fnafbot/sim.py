@@ -41,13 +41,17 @@ CAMERA_DISRUPTION_FRAMES = 300
 
 # How far the movement timers may fall behind real time over a night (see
 # NightSim.timer_lag), and how quickly that lag builds up.
-# Two parts, both drawn per night, as measured on cold-started nights: a
-# jump to 0.5 - 0.85 s in the first minute and a half, and a small drift
-# after that.
-TIMER_LAG_JUMP = (0.3, 0.8)
+# Two parts, both drawn per night: a jump early in the night, and a small
+# drift after that. Since the bot's power clock is fitted properly
+# (campaign47 on) every live sample has been 0.00 - 0.09 s; these allow a
+# little more. (Before the fix the "lag" looked like a jump to 0.3 - 0.8 s
+# and a drift of up to 0.0015 s/s - that was the clock. Those values still
+# make a good stress test: the brain then has to notice and widen its
+# margins, see brain.LAG_WIDE_TRIGGER.)
+TIMER_LAG_JUMP = (0.0, 0.15)
 TIMER_LAG_START = (15.0, 35.0)       # seconds into the night the jump starts
 TIMER_LAG_BUILDUP = (10.0, 30.0)     # its time constant, seconds
-MAX_TIMER_LAG_RATE = 0.0015          # the drift, seconds per second (live 4/20 #12: ~0.0015) ...
+MAX_TIMER_LAG_RATE = 0.0002          # the drift, seconds per second ...
 TIMER_LAG_DRIFT_FROM = (60.0, 160.0)  # ... from this far into the night
 # Timers that run on the game's "every N seconds" clock and so share the lag.
 LAGGING_TIMERS = ("bonnie", "chica", "freddy", "foxy", "relock")
