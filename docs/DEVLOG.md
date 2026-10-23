@@ -1078,3 +1078,37 @@ door, so it costs only the camera. A stage 3 there goes straight to the
 existing emergency (both doors shut, make him run at the shut door).
 Simulator, 40 nights each: 4/20 30/40 (was 23), 6th Night 32/40, Night 5
 34/40; nobody got in on any.
+
+### Live 4/20 #17 (21:08), and "the bot keeps needlessly keeping the left door shut"
+
+Out of power at ~436 s (79 % at 121 s, 54 % at 241 s). The user, watching:
+"it needs to be aware of the status of every single door and what is
+using power. 19 % at 3 AM is absurd." New tool `tools/door_report.py`
+(door timeline from a live log) on #17: the LEFT door was shut 169 s of
+417 - 41 % of the night - against 12 % for the right. One span alone was
+82 s (290 - 372 s): Bonnie seen at 289 s, door shut, and then not a single
+look at the left side - no peek ever fitted between the Foxy flips and
+Chica's checks, because the lag range was 0.1 - 1.0 s wide. It was that
+wide because Chica's watches all ended "ambiguous" (Bonnie, at his shut
+door, could have switched the lights off too) - while each time the very
+next look through her window showed her gone.
+
+Changes:
+
+* Watching Chica, an ambiguous lights-out is settled on the spot by her
+  window: gone - it was her tick (an exact sample); still there - it was
+  Bonnie's, and if it was his first tick since he was seen at his door,
+  he has left it. (Two simulator losses found on the way: the look
+  happens before HER tick may have come, so it must not count as "she
+  stayed"; and after an unseen tick of his, the lights going out may be
+  Bonnie ARRIVING - opening his door then let him in.)
+* A power ledger: the brain books every second each door is shut, why,
+  and how long since anyone was actually seen there, plus the camera
+  time; it is logged every 30 s next to the power, and the status panel
+  shows each door's state ("L SHUT 12s (bonnie at the door...)").
+* The power-misread filter accepts an "impossible" value only after it has
+  stayed for 2 s (five readings in a row let "48 % -> 4 % -> 31 %" through).
+
+Simulator, 60 nights each, nobody got in on any: 4/20 56/60 (8.2 % left),
+6th Night 55/60 (9.5 %), Night 5 52/60 (9.4 %); Nights 1-3 30/30, Night 4
+26/30 (power).

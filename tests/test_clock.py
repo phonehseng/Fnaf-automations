@@ -89,6 +89,15 @@ def test_power_misreads_are_ignored():
     assert body._power_reading_ok(75)           # a normal charge
     body.last_power = 10
     assert body._power_reading_ok(9)            # 10 -> 9 is real
+    # A value that keeps coming back for POWER_MISREAD_PATIENCE seconds is real.
     body.last_power = 12
-    results = [body._power_reading_ok(1) for _ in range(body_module.POWER_MISREAD_PATIENCE)]
-    assert results[:-1] == [False] * (body_module.POWER_MISREAD_PATIENCE - 1) and results[-1]
+    clock = [100.0]
+    body_module.time.perf_counter, real = (lambda: clock[0]), body_module.time.perf_counter
+    try:
+        results = []
+        for _ in range(12):
+            results.append(body._power_reading_ok(1))
+            clock[0] += body_module.POWER_MISREAD_PATIENCE / 8
+        assert not any(results[:8]) and any(results[8:])
+    finally:
+        body_module.time.perf_counter = real

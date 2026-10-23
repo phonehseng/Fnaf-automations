@@ -54,8 +54,8 @@ SIGHTING_MAX_GAP = 0.12
 
 # Write the power left to the log this often (night seconds).
 POWER_LOG_EVERY = 30.0
-# See RealBody._power_reading_ok.
-POWER_MISREAD_PATIENCE = 5
+# See RealBody._power_reading_ok (seconds).
+POWER_MISREAD_PATIENCE = 2.0
 # Warn when a timed wait ends this much later than asked.
 WAIT_OVERSHOOT_WARN = 0.15
 # Flip request -> camera picture readable, measured on the live game
@@ -134,6 +134,7 @@ class RealBody:
         self.last_power: int | None = None
         self._odd_power: int | None = None      # an unbelievable power reading seen lately ...
         self._odd_count = 0                     # ... this many times in a row
+        self._odd_since = 0.0                   # ... since this moment (perf_counter)
         self.over = False
         self.facing: str | None = None
         # Alternate between two click spots per button (see layout.py note on
@@ -293,8 +294,10 @@ class RealBody:
         Power only ever goes down, and by at most 16 % at once (Foxy's
         fourth bang); a lost leading digit drops a two-digit value to one
         digit. Anything else is a misread - unless the same value keeps
-        coming back (POWER_MISREAD_PATIENCE readings in a row): then it is
-        real, e.g. a bang that took 12 % to 1 %."""
+        coming back for POWER_MISREAD_PATIENCE seconds: then it is real, e.g.
+        a bang that took 12 % to 1 %. (Counting five readings in a row was
+        not enough: the same digit goes missing on frame after frame, and
+        "48 % -> 4 % -> 31 %" was logged on live 4/20 #17.)"""
         last = self.last_power
         if last is None:
             return True
@@ -302,11 +305,12 @@ class RealBody:
         if believable:
             self._odd_power, self._odd_count = None, 0
             return True
-        if power == self._odd_power:
-            self._odd_count += 1
-        else:
-            self._odd_power, self._odd_count = power, 1
-        if self._odd_count >= POWER_MISREAD_PATIENCE:
+        now = time.perf_counter()
+        if power != self._odd_power:
+            self._odd_power, self._odd_count, self._odd_since = power, 1, now
+            return False
+        self._odd_count += 1
+        if self._odd_count >= 10 and now - self._odd_since >= POWER_MISREAD_PATIENCE:
             self._odd_power, self._odd_count = None, 0
             return True
         return False

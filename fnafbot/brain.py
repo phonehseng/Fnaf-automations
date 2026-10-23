@@ -203,6 +203,9 @@ FOXY_LAG_CAP = 0.3
 COVE_LOOK_EVERY = 30.0
 COVE_LOOK_SECONDS = 2.2       # raise, switch to the cove, read, back to 4B, lower
 
+# Log the power ledger (door and camera time, see Brain._power_ledger) this often.
+LEDGER_EVERY = 30.0
+
 # After someone was seen on 4B, assume it stays blocked this long before
 # planning another routine cove check.
 FOUR_B_BUSY_SECONDS = 20.0
@@ -353,6 +356,13 @@ class Brain:
         # Measured lag of the movement timers: (night time, lag) samples, and
         # the floor the tick model uses (see LAG_NOISE).
         self.lag_samples: list[tuple[float, float, float]] = []   # (night time, lag at least, lag at most)
+        # Power ledger (see _book_door): seconds each door has been shut, when
+        # the current shut span started and why, and every camera view.
+        self.door_seconds = {LEFT: 0.0, RIGHT: 0.0}
+        self.door_shut_since = {LEFT: 0.0, RIGHT: 0.0}
+        self.door_shut_reason = {LEFT: "", RIGHT: ""}
+        self.view_intervals_all: list[tuple[float, float]] = []
+        self.ledger_logged_at = 0.0
         self.lag_lo = 0.0
         # Warm-up still to do (see WARMUP_CAMERAS): the camera tour, and a
         # door-and-light cycle on each side.
@@ -376,6 +386,7 @@ class Brain:
             "Foxy": "LEFT COVE" if self.foxy_emergency else
                     f"stage {self.foxy_stage}" + (f" (<= {self.foxy_max_stage})" if self.foxy_max_stage > self.foxy_stage else ""),
             "Freddy": {None: "?", True: "at 4B", False: "not at 4B"}[self.freddy_at_4b],
+            "Doors": " / ".join(self._door_note(w) for w in (self.left, self.right)),
         }
         log.info("%.2fs  %s", self.body.now(), action)
         self.report(self.status)
@@ -564,6 +575,9 @@ class Brain:
         self.say("Night started - watching the clock")
         while not self.body.night_over():
             now = self.body.now()
+            if now - self.ledger_logged_at >= LEDGER_EVERY:
+                self.ledger_logged_at = now
+                log.info("%.0fs  power %s%%: %s", now, self.body.power(), self._power_ledger())
             self._account_for_ticks(now)
             job = self._choose_job(now)
             if job is None:
@@ -698,13 +712,14 @@ class Brain:
         self.body.press(kind, side)
         self.last_press_at = self.body.now()
 
-    def _press_door(self, watch: DoorWatch) -> None:
+    def _press_door(self, watch: DoorWatch, reason: str = "") -> None:
         """Toggle a door. The game ignores door clicks while the door is still
         moving, so first wait for its previous animation to finish; then
         remember when this one will finish."""
         self.body.face(watch.side)
         self.body.wait_until(max(self.body.now(), watch.moving_until))
         self._press("door", watch.side)
+        self._book_door(watch, reason)
         watch.door_closed = not watch.door_closed
         self._confirm_door_click(watch)
         duration = rules.DOOR_CLOSE_SECONDS if watch.door_closed else rules.DOOR_OPEN_SECONDS
@@ -714,6 +729,46 @@ class Brain:
         if watch.door_closed:
             watch.closed_at = self.body.now()
             watch.close_at = None
+
+    # -- what is using power -----------------------------------------------
+
+    def _book_door(self, watch: DoorWatch, reason: str) -> None:
+        """Keep the door ledger: every second a door is shut costs power, and
+        on a 4/20 night everything the bot does must fit in ~28 % of the
+        battery (the rest is the game's own drain). Called just before a
+        door is toggled."""
+        now = self.body.now()
+        if watch.door_closed:
+            self.door_seconds[watch.side] += now - self.door_shut_since[watch.side]
+        else:
+            self.door_shut_since[watch.side] = now
+            self.door_shut_reason[watch.side] = reason or "?"
+
+    def _door_note(self, watch: DoorWatch) -> str:
+        """Short door state for the status panel: open, or shut for how long
+        and why."""
+        if not watch.door_closed:
+            return f"{watch.side[0].upper()} open"
+        shut_for = self.body.now() - self.door_shut_since[watch.side]
+        return f"{watch.side[0].upper()} SHUT {shut_for:.0f}s ({self.door_shut_reason[watch.side][:18]})"
+
+    def _power_ledger(self) -> str:
+        """One line: how long each door has been shut (and why it is shut
+        now, and since when nobody was SEEN there), and the camera time."""
+        now = self.body.now()
+        parts = []
+        for watch in (self.left, self.right):
+            total = self.door_seconds[watch.side]
+            if watch.door_closed:
+                shut_for = now - self.door_shut_since[watch.side]
+                total += shut_for
+                state = (f"SHUT {shut_for:.0f} s ({self.door_shut_reason[watch.side]}; "
+                         f"{watch.who} last seen there {now - watch.seen_at_door_at:.0f} s ago)")
+            else:
+                state = "open"
+            parts.append(f"{watch.side} door {state}, {total:.0f} s shut in all")
+        camera = sum(end - start for start, end in self.view_intervals_all)
+        return "; ".join(parts) + f"; camera up {camera:.0f} s"
 
     def _confirm_door_click(self, watch: DoorWatch) -> None:
         """Make sure the game saw the door click.
@@ -1127,7 +1182,7 @@ class Brain:
         if watch.door_closed:
             return
         self.body.wait_until(max(self.body.now(), after + BUTTON_COOLDOWN))
-        self._press_door(watch)
+        self._press_door(watch, reason=f"{watch.who} at the door: {reason}")
         self.say(f"{watch.who.upper()} AT {watch.side.upper()} DOOR - door closed ({reason})", alert=True)
 
     # -- just-in-time doors ------------------------------------------------
@@ -1471,7 +1526,41 @@ class Brain:
             # the lag - against the LATER of the two ticks, which can only
             # make the estimate too small (the safe side for door clicks).
             other = self.right if watch is self.left else self.left
-            if not self._other_unchanged(other):
+            if SEEN_THROUGH_SHUT_DOOR[watch.side]:
+                # Watching Chica: her window shows with the door shut, so
+                # just look. Gone - the lights went out for her. Still
+                # there - they went out for Bonnie, who has left his door.
+                # (Live 4/20 #17: three such watches stayed "ambiguous", the
+                # lag range stayed 0.1 - 1.0 s wide, and no peek through
+                # Bonnie's door fitted for 82 s.)
+                self.body.wait_until(max(self.body.now(), self.last_press_at + BUTTON_COOLDOWN))
+                present, lit = self._flash_light(watch)
+                if lit and present:
+                    # The lights went out for the other one. That says
+                    # nothing about HER tick: with the lag it may still be to
+                    # come (counting it as "she stayed" once let a simulated
+                    # Chica leave unseen, come back and walk in).
+                    self._note_lag((other.who,), dark_at)
+                    # It was his DEPARTURE only if this was his first tick
+                    # since he was last seen at his door; after an unseen one
+                    # it may be him ARRIVING back (simulator: that read
+                    # opened Bonnie's door for him).
+                    seen = other.seen_at_door_at
+                    first = self._next_tick(other.who, seen - self._lag_spread(seen) - 0.05)
+                    his_first_tick = dark_at < first + self._lag_spread(first) + 0.3
+                    if other.at_door and other.door_closed and his_first_tick:
+                        other.at_door = False
+                        other.min_moves = other.distance[other.repelled_to]
+                        other.checked_since_tick = True
+                        self.say(f"Lights went out for {other.who.capitalize()} - he has left the "
+                                 f"{other.side} door; {watch.who.capitalize()} is still at hers")
+                    return
+                if not lit:
+                    self.say(f"Lights went out at {dark_at:.2f}s - but the other one may have moved too")
+                    self._note_lag((watch.who, other.who), dark_at)
+                    return
+                # Gone: it was her tick (fall through to "she left").
+            elif not self._other_unchanged(other):
                 self.say(f"Lights went out at {dark_at:.2f}s - but the other one may have moved too")
                 self._note_lag((watch.who, other.who), dark_at)
                 return
@@ -1655,6 +1744,7 @@ class Brain:
             self.camera_selected = "4B"
         # Record when a picture was showing; Foxy's lock is judged from this.
         self.view_intervals.append((self._view_started, self.body.now()))
+        self.view_intervals_all.append((self._view_started, self.body.now()))
         self.view_intervals = self.view_intervals[-8:]
         tick = self._next_tick("foxy",self._view_started)
         log.info("camera view %.2f-%.2f s; Foxy tick at %.2f %s", self._view_started, self.body.now(), tick,
@@ -1723,7 +1813,7 @@ class Brain:
         if not self.warmup_tour_done and self.body.now() < WARMUP_UNTIL:
             self._warmup_tour(tick)
         stage = None
-        if cove_check and self._read_4b():
+        if cove_check and (self._right_door_safe() or self._read_4b()):
             stage = self._look_at_cove()
             if stage is None:
                 # An unreadable cove is not "no news": the game blanks a
@@ -1778,7 +1868,16 @@ class Brain:
         four_b_blocked = self.body.now() - self.four_b_busy_at < FOUR_B_BUSY_SECONDS
         # A possible stage 3 is worth trying on every flip (4B is read
         # first; if it is occupied the flip just holds Foxy).
-        return wanted and (not four_b_blocked or self.foxy_max_stage >= 3)
+        # With the right door fully shut Freddy cannot get in whatever 4B
+        # shows, so the flip can look at the cove anyway - at least every
+        # COVE_LOOK_EVERY (on live 4/20 #17 the separate look never found a
+        # free moment: 250 s without seeing the cove).
+        right_shut = self._right_door_safe() and self.body.now() - self.foxy_verified_at > COVE_LOOK_EVERY
+        return wanted and (not four_b_blocked or self.foxy_max_stage >= 3 or right_shut)
+
+    def _right_door_safe(self) -> bool:
+        """Right door fully shut: any camera may show (Freddy's rule)."""
+        return self.right.door_closed and self.body.now() >= self.right.moving_until
 
     def _foxy_alert(self) -> None:
         """Foxy may have left the cove (some of his ticks were not covered).
