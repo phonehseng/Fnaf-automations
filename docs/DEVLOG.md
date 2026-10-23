@@ -1036,3 +1036,22 @@ before her move "at 94.41 s") was refused three times - she was in. The
 assumed floor is now gone completely: only a measured lag raises it.
 Simulator (40 nights each): 4/20 26/40, 6th Night 36/40, Night 5 34/40 -
 nobody got in on any of them; every loss a power-out.
+
+### Live 4/20 #15 (20:45): out of power at ~444 s
+
+Nobody got in; power 77 % at 121 s, 57 % at 242 s (the best yet), 28 % at
+362 s, 0 at ~444 s (two Foxy runs, both bangs on the shut door). The night
+budget: 999 units, 1 a second always (53.5 %), plus Night 7's passive 1
+every 3 s (17.8 %) - which leaves 28.6 % for every door, light and camera
+second of the night. The log's spending in 444 s: ~47 s of camera
+pictures (82 flips), the left door shut ~142 s in 21 spans, the right ~74 s,
+122 light looks - the doors are the big item. All three departure watches
+ended "the other one may have moved", so each left-door visit then waited
+14 - 20 s for a peek.
+
+Change: after an ambiguous lights-out, the bot looks at Chica's window (it
+shows with her door shut): if she is where she was - at the door or not -
+the lights went out for Bonnie, and he has gone. (Also tried: refusing a
+blind reopen whenever a Foxy flip would pull its closing click forward -
+far worse in the simulator, 7/40 4/20 nights; short reopens still save
+power on balance.)

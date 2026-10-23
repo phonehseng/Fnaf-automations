@@ -1364,6 +1364,33 @@ class Brain:
         return (uncertain and now >= LAG_HUNGRY_AFTER
                 and self.foxy_max_stage < LAG_HUNGRY_FOXY_STAGE and not self.foxy_emergency)
 
+    def _other_unchanged(self, other: DoorWatch) -> bool:
+        """After an ambiguous lights-out: look at the OTHER doorway (Chica's
+        window shows even with her door shut). If they are still where we
+        last knew them - at the door, or not - the lights went out for the
+        one we were watching. Live 4/20 #15: all three watches ended
+        "the other one may have moved", and each time the left door then
+        stayed shut 14 - 20 s waiting for a peek."""
+        if not (SEEN_THROUGH_SHUT_DOOR[other.side] or not other.door_closed):
+            return False        # (Bonnie's doorway is hidden behind his shut door)
+        if self._next_commitment(self.body.now()) - self.body.now() < PAN_SECONDS + 0.9:
+            return False        # no time for the look before a flip / door click
+        was_there = other.at_door
+        self.body.face(other.side)
+        self.body.wait_until(max(self.body.now(), self.last_press_at + BUTTON_COOLDOWN))
+        present, lit = self._flash_light(other)
+        if not lit:
+            return False
+        if present:
+            other.at_door = True
+            other.seen_for_sure = True
+            other.seen_at_door_at = self.body.now()
+            other.min_moves = 0
+        elif was_there:
+            other.at_door = False
+            other.min_moves = other.distance[other.repelled_to]
+        return present == was_there
+
     def _other_may_have_moved(self, watch: DoorWatch, seen_at: float) -> float | None:
         """The lights go off when EITHER of them arrives at or leaves a
         doorway. Could the other one have done so at ``seen_at``? Returns
@@ -1426,10 +1453,12 @@ class Brain:
             # together (4.97 / 4.98 s), and then the moment still measures
             # the lag - against the LATER of the two ticks, which can only
             # make the estimate too small (the safe side for door clicks).
-            self.say(f"Lights went out at {dark_at:.2f}s - but the other one may have moved too")
             other = self.right if watch is self.left else self.left
-            self._note_lag((watch.who, other.who), dark_at)
-            return
+            if not self._other_unchanged(other):
+                self.say(f"Lights went out at {dark_at:.2f}s - but the other one may have moved too")
+                self._note_lag((watch.who, other.who), dark_at)
+                return
+            # The other one is where they were: the lights went out for us.
         # A door still closing at their tick holds the move until it is shut:
         # then the lights went off when the door finished, not at the tick -
         # a departure all the same, but no measure of the timers' lag.
