@@ -134,6 +134,7 @@ class RealBody:
         self.hud_missing_since: float | None = None   # first look that found no HUD
         self.hud_missing_count = 0                     # looks in a row without the HUD
         self.last_power: int | None = None
+        self.bangs: list[float] = []            # night times of Foxy's bangs on the door
         self._odd_power: int | None = None      # an unbelievable power reading seen lately ...
         self._odd_count = 0                     # ... this many times in a row
         self._odd_since = 0.0                   # ... since this moment (perf_counter)
@@ -327,6 +328,15 @@ class RealBody:
         if hud.power is not None and not self._power_reading_ok(hud.power):
             hud = replace(hud, power=None)      # a misread: keep the last good value
         if hud.power is not None:
+            if self.last_power is not None and hud.power < self.last_power:
+                # A drop between the whole-second charges, or of 2 % or more
+                # at once (a charge never takes more than 1 %), is Foxy's bang
+                # on the shut left door (event [324]).
+                at = self.now()
+                between = 0.2 < at - int(at) < 0.8
+                if between or self.last_power - hud.power >= 2:
+                    self.bangs.append(at)
+                    log.info("power %d%% -> %d%% at %.2f s: Foxy's bang", self.last_power, hud.power, at)
             if self.last_power is not None and hud.power != self.last_power:
                 # The change happened somewhere between the previous look at
                 # the HUD and this one.

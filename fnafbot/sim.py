@@ -125,6 +125,7 @@ class NightSim:
         self.foxy_stage3_frames = 0
         self.foxy_run_frames = 0
         self.foxy_bangs = 0
+        self.bang_times: list[float] = []
 
         # On the real game the movement timers fall behind real time when
         # the game stalls, which it does early in a camera-heavy night (+0.8 s
@@ -415,6 +416,7 @@ class NightSim:
                 self.foxy_stage = self.rng.randint(0, 1)
                 self.foxy_stage3_frames = 0
                 self.log(f"Foxy banged on the door (-{cost / 10:.0f}%)")
+                self.bang_times.append(self.now)
 
 
 # ---------------------------------------------------------------------------
@@ -563,6 +565,11 @@ class SimBody:
 
     def shown_camera(self) -> str | None:
         return self.sim.viewing
+
+    @property
+    def bangs(self) -> list[float]:
+        """Foxy's bangs, as the real body sees them in the power readout."""
+        return [t + LAMP_READ_SECONDS for t in self.sim.bang_times]
 
     # In the simulator every timer runs on one clock.
     @staticmethod

@@ -377,6 +377,7 @@ class Brain:
         # After a run his ticks are anchored on the bang (real seconds, mod
         # his period) - see _foxy_timer_restarted. None until his first run.
         self.foxy_anchor: float | None = None
+        self.bangs_seen = 0                # Foxy's bangs already booked (see _book_bangs)
         self.view_intervals: list[tuple[float, float]] = []   # when a camera picture showed
         # Measured lag of the movement timers: (night time, lag) samples, and
         # the floor the tick model uses (see LAG_NOISE).
@@ -620,7 +621,24 @@ class Brain:
     # Bookkeeping: what can have changed since we last looked
     # ------------------------------------------------------------------
 
+    def _book_bangs(self) -> None:
+        """Foxy banged on the shut door (the body saw the power drop): he is
+        back in the cove at stage 0 or 1, and his timer starts again from
+        that moment - wherever the bot thought it was (_foxy_timer_restarted).
+        On live 4/20 #23 a run the bot had set off was followed 73 s later by
+        another: the restart had been placed by assumption, not by the bang."""
+        bangs = getattr(self.body, "bangs", [])
+        while self.bangs_seen < len(bangs):
+            at = bangs[self.bangs_seen]
+            self.bangs_seen += 1
+            self._foxy_timer_restarted(at)
+            self.foxy_stage, self.foxy_max_stage = 0, 1
+            self.foxy_fuse_from = math.inf
+            self.foxy_verified_at = max(self.foxy_verified_at, at)
+            log.info("%.2fs  Foxy banged on the door: his timer restarts from here", at)
+
     def _account_for_ticks(self, now: float) -> None:
+        self._book_bangs()
         # A tick only counts as passed once the clock is certainly past it;
         # otherwise a doorway check could run just BEFORE the real tick and
         # report "empty" about a doorway they are about to step into.
@@ -663,7 +681,12 @@ class Brain:
                     watch.checked_since_tick = False
                     log.info("%.2fs  %s certainly sent back at %.2f s (AI 20, door shut)",
                              now, watch.who.capitalize(), tick)
-        # Foxy: every tick of his that no camera flip covered may have moved him.
+        self._book_foxy_ticks(now)
+
+    def _book_foxy_ticks(self, until: float) -> None:
+        """Foxy: every tick of his up to ``until`` that no camera flip covered
+        may have moved him."""
+        now = until
         for tick in self._tick_times("foxy",self.foxy_last_tick_seen + 1e-6, now + 1e-6):
             self.foxy_last_tick_seen = tick
             if self.ai(tick)["foxy"] > 0 and not self._foxy_tick_covered(tick) and self.foxy_max_stage < 3:
@@ -1850,7 +1873,7 @@ class Brain:
         # stage 3, when it was standing still anyway (_foxy_timer_paused).
         if not (view["visible"] and view["foxy_stage"] is not None and view["foxy_stage"] >= 3):
             cove_to = self.body.game_to_real(getattr(self.body, "camera_clicked_at", self.body.now()))
-            self._foxy_timer_paused(cove_to - cove_from)
+            self._foxy_timer_paused(cove_to - cove_from, started_at=self.body.real_to_game(cove_from))
         if not view["visible"] or view["foxy_stage"] is None:
             return None
         self.foxy_stage = self.foxy_max_stage = view["foxy_stage"]
@@ -1914,7 +1937,7 @@ class Brain:
         return max(self.body.now(), self._view_started + FREEZE_VIEW_SECONDS, planned_end,
                    max(first_relock, covering_relock) + 0.1 + FOXY_CLOCK_MARGIN)
 
-    def _foxy_timer_paused(self, seconds: float) -> None:
+    def _foxy_timer_paused(self, seconds: float, started_at: float | None = None) -> None:
         """Foxy's timer stood still for ``seconds`` (real): all his ticks
         from now on come that much later.
 
@@ -1928,6 +1951,11 @@ class Brain:
         flips, and on busy 4/20 nights he climbed a stage every few ticks."""
         if seconds <= 0:
             return
+        if started_at is not None:
+            # His ticks before the pause came on the old schedule: book them
+            # first (shifting them too counted ticks a flip HAD covered as
+            # uncovered - false Foxy alerts on live 4/20 #23).
+            self._book_foxy_ticks(started_at)
         self.foxy_phase_shift += seconds
         shift = self.body.real_to_game(seconds) - self.body.real_to_game(0.0)
         self.foxy_last_tick_seen += shift

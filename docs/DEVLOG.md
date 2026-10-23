@@ -1249,3 +1249,23 @@ timer fired when he reached stage 3, stood still, and starts a full period
 again from the bang. The simulator pauses his timer the same way: there
 the previous brain let Foxy in on 24/60 4/20 nights (as live); the new one
 56/60 (11.9 % left; 2 Foxy, 2 power), 6th Night 57/60, Night 5 56/60.
+
+### Live 4/20 #23: Foxy at about 464 s with 9 % left
+
+Two faults in the new Foxy model, both found in the #23 log:
+
+- Each cove look moved ALL his ticks later - including the ones that had
+  already happened, so ticks the flips had covered were "uncovered" again
+  and the bot raised false Foxy alerts (more cove looks, more pauses). Now
+  the ticks up to the start of the look are booked first
+  (`_book_foxy_ticks`), and only the later ones move.
+- After a run he set off himself, his restart was placed by assumption
+  (the 2A view + 100 frames). His next run came 73 s later, at stage 3 when
+  the bot thought he was at 1. Now the body records each bang from the
+  power readout (a drop between the whole-second charges, or of 2 % or
+  more at once - a charge never does that), and the brain re-anchors his
+  timer on the measured bang and resets his stage, whether the bot forced
+  the run or he ran on his fuse.
+
+Simulator, 60 nights each: 4/20 60/60 (13.7 % left), 6th Night 60/60,
+Night 5 57/60 (3 out of power - unchanged).
