@@ -1,7 +1,7 @@
 """A small always-on-top status panel drawn over the game.
 
-It shows, in plain words, what the bot is doing right now ("Checking Foxy",
-"Bonnie at left door - door CLOSED") plus the power, time and what it
+It shows, in plain words, what the bot is doing right now ("Oh no! Bonnie's
+here! Left door SHUT" - see narrator.py) plus the power, time and what it
 believes about each animatronic - and a little analog clock of the night:
 
 * the HOUR hand sweeps from 12 (night start) to 6 (6 AM) over the night;
@@ -47,6 +47,7 @@ TEXT = "#e8e8e8"
 DIM = "#8a8a8a"
 ACCENT = "#7fd1ff"
 ALERT = "#ff5050"
+WARN = "#ffb347"          # power running low
 OPACITY = 0.85
 
 CLOCK_SIZE = 56          # pixels; the clock face is drawn inside this square
@@ -108,7 +109,7 @@ class StatusOverlay:
 
     def show(self, action: str | None = None, status: str | None = None,
              threats: str | None = None, alert: bool = False,
-             night_time: float | None = None, rate: float = 1.0) -> None:
+             night_time: float | None = None, rate: float = 1.0, warn: bool = False) -> None:
         """Update the panel. Any text argument left as None keeps its old text.
 
         action     - what the bot is doing this instant (top line)
@@ -118,9 +119,11 @@ class StatusOverlay:
         night_time - seconds into the night (game seconds); None hides the clock
         rate       - how many game seconds pass per real second (to keep the
                      hands moving between updates)
+        warn       - draw the status line in amber (power running low)
         """
         self._updates.put({"action": action, "status": status, "threats": threats, "alert": alert,
-                           "night_time": night_time, "rate": rate, "told_at": time.perf_counter()})
+                           "night_time": night_time, "rate": rate, "told_at": time.perf_counter(),
+                           "warn": warn})
 
     def close(self) -> None:
         self._updates.put({"quit": True})
@@ -155,11 +158,16 @@ class StatusOverlay:
 
         text_column = tk.Frame(root, bg=BACKGROUND)
         text_column.pack(side="left", fill="both", expand=True)
-        font = ("Consolas", 10)
+        # Lines wrap instead of running off the panel's edge; the details
+        # use a smaller font so all of them fit.
+        font = ("Consolas", 8)
+        wrap = box.x1 - box.x0 - CLOCK_SIZE - 150
         self._action = tk.Label(text_column, text="Starting...", fg=ACCENT, bg=BACKGROUND,
-                                font=(font[0], 11, "bold"), anchor="w")
-        self._status = tk.Label(text_column, text="", fg=TEXT, bg=BACKGROUND, font=font, anchor="w")
-        self._threats = tk.Label(text_column, text="", fg=TEXT, bg=BACKGROUND, font=font, anchor="w")
+                                font=(font[0], 10, "bold"), anchor="w", justify="left", wraplength=wrap)
+        self._status = tk.Label(text_column, text="", fg=TEXT, bg=BACKGROUND, font=font, anchor="w",
+                                justify="left", wraplength=wrap)
+        self._threats = tk.Label(text_column, text="", fg=DIM, bg=BACKGROUND, font=font, anchor="w",
+                                 justify="left", wraplength=wrap)
         for label in (self._action, self._status, self._threats):
             label.pack(fill="x", padx=2)
 
@@ -231,7 +239,7 @@ class StatusOverlay:
                 if update["action"] is not None:
                     self._action.configure(text=update["action"], fg=ALERT if update["alert"] else ACCENT)
                 if update["status"] is not None:
-                    self._status.configure(text=update["status"])
+                    self._status.configure(text=update["status"], fg=WARN if update["warn"] else TEXT)
                 if update["threats"] is not None:
                     self._threats.configure(text=update["threats"])
                 self._night_time = update["night_time"]

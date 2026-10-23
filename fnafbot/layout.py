@@ -126,7 +126,10 @@ CAMERA_MAP = Box(830, 330, 1240, 670)
 # analog night clock on the left, the status text on the right. Nothing the
 # vision code relies on is in this strip, and it is listed in CAMERA_IGNORE
 # below so the panel never confuses the camera checks.
-OVERLAY = Box(350, 0, 930, 64)
+# Wide enough that the panel's lines are not cut off (they were at
+# 350 - 930), and kept clear of what the vision reads near the top: the
+# HUD clock starts at x 1110, the camera-pan strip at y 72.
+OVERLAY = Box(260, 0, 1095, 70)
 
 # Parts of a camera picture that are covered by the HUD/map and must be
 # ignored when comparing the picture to the reference images.

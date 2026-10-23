@@ -25,7 +25,7 @@ from datetime import datetime
 
 import cv2
 
-from fnafbot import assets, config, menu, rules
+from fnafbot import assets, config, menu, narrator, rules
 from fnafbot.body import CAPTURE_LATENCY, RealBody, StopRequested
 from fnafbot.brain import Brain, Status
 from fnafbot.controller import Controller
@@ -144,11 +144,14 @@ class Session:
 
         def report(status: Status) -> None:
             t = body.now()
+            # The panel speaks to people (narrator.py); the log keeps the
+            # brain's exact words for the tools.
+            comment, low = narrator.power_comment(body.power(), t, night)
             self.overlay.show(
-                action=status.action,
+                action=narrator.narrate(status.action, status.notes),
                 alert=status.alert,
-                status=f"{label} | Power {body.power()}% | Usage {controller.hud.usage or '?'} | "
-                       f"t={t:5.1f}s | tick {body.scale:.4f}s",
+                status=f"{label} | Power {body.power()}% - {comment} | Usage {controller.hud.usage or '?'}",
+                warn=low,
                 threats=" | ".join(f"{name}: {note}" for name, note in status.notes.items()),
                 night_time=t,
                 rate=1.0 / body.scale,   # keeps the clock hands moving between updates
@@ -160,6 +163,7 @@ class Session:
         # called a jumpscare at 533 s a victory; see docs/DEVLOG.md.)
         survived = body.six_am_seen
         power = body.power()
+        self.overlay.show(action=narrator.night_over_message(survived, power), alert=not survived)
         self.results.append((label, survived, power))
         log.info("%s finished: %s with %d%% power", label, "SURVIVED" if survived else "LOST", power)
         if not survived:
@@ -225,6 +229,8 @@ def main() -> None:
     except (StopRequested, KeyboardInterrupt):
         log.info("Stopped by the user")
     finally:
+        if session.results:
+            time.sleep(3.0)      # leave the last words ("6 AM! We made it...") up for a moment
         session.overlay.close()
         for label, survived, power in session.results:
             print(f"{label}: {'survived' if survived else 'LOST'} with {power}% power")
