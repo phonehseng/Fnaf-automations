@@ -434,6 +434,13 @@ class Brain:
         """How much later than the tick model a tick at night time ``at``
         may come (see LAG_NOISE)."""
         if at >= LAG_SETTLED_AFTER and not self._settled_samples():
+            # No sample since the lag settled: the top of the range is the
+            # settled assumption, growing - or the latest sample's growth
+            # allowance, whichever is higher. The FLOOR is never raised
+            # above what a sample measured: an assumed floor of 0.45 s on
+            # live 4/20 #13, whose lag was ~0.05 s at 64 s, put every tick
+            # 0.4 s late on the model - door clicks barely before the real
+            # tick.
             high = LAG_SETTLED_HI + LAG_SETTLED_GROWTH * (at - LAG_SETTLED_AFTER)
             return max(0.0, high - self.lag_lo)
         if not self.lag_samples:
@@ -558,7 +565,7 @@ class Brain:
     # ------------------------------------------------------------------
 
     def _account_for_ticks(self, now: float) -> None:
-        if now >= LAG_SETTLED_AFTER and not self._settled_samples():
+        if now >= LAG_SETTLED_AFTER and not self.lag_samples:
             self._raise_lag_floor(LAG_SETTLED_LO)      # see LAG_SETTLED_AFTER
         # A tick only counts as passed once the clock is certainly past it;
         # otherwise a doorway check could run just BEFORE the real tick and

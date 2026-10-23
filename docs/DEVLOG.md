@@ -1011,3 +1011,19 @@ the top 0.8 s + 0.0015 s per second after 90 s (1.27 s by 400 s, matching
 #12). The simulator's lag drift goes up to 0.0015 s/s to match. (Simulator:
 no change either way within noise - it does not reproduce the false Foxy
 alarms; the live night is the test.)
+
+### Live 4/20 #13 (20:35): Chica at ~164 s - my own floor rule
+
+This night's lag was small: -0.03 .. +0.10 s at 64 s. But the rule just
+added (an early sample does not hold the floor after 90 s) raised the
+floor to an assumed 0.45 s at 90 s - so every tick sat 0.4 s too LATE on
+the model. Chica was seen at 160.5 s; her move was "at 163.68 s", the
+click planned for 163.18 s; her real tick came at ~163.3 s, right on top
+of it, and the game ignored the click three times (she was in).
+
+Fix: the floor of the lag range only ever comes from a measurement (a
+measured lag is a true lower bound - it never shrinks); an assumption only
+ever widens the TOP of the range. With no sample since 90 s the top is
+0.8 s + 0.0015 s/s, or the latest sample plus its growth allowance,
+whichever is higher. The 0.45 s floor stays only for a night with no
+sample at all.
