@@ -72,9 +72,18 @@ CLOCK_TRACK_WINDOW = 0.2
 # stored moved with it. A real error still gets corrected, over a few
 # sightings.
 CLOCK_MAX_STEP = 0.06
-# For this long after the first frame, the movement timers' origin
-# (real_origin) follows the clock's corrections; after that it stays put.
-ORIGIN_SETTLES_AFTER = 30
+# The night start. The bot notices the first frame of the night a moment
+# late - 0.02 s on live 4/20 #25, 0.4 s on #27 (measured on the OBS
+# recordings) - but the power charges come at exactly whole seconds after
+# it, so the first minute of power changes pins it down. Until then a power
+# change may be up to EARLY_LATE_START earlier than the clock expects (the
+# start was only ever noticed late, never early), the fit is not limited to
+# CLOCK_MAX_STEP, and the movement timers' origin (real_origin) follows it.
+# After ORIGIN_SETTLES_AFTER charges the origin stays put. (#27 was lost to
+# Bonnie: the clock started 0.4 s late, the tracking window threw every
+# early power change away, and her ticks came 0.4 s before the bot's model.)
+ORIGIN_SETTLES_AFTER = 60
+EARLY_LATE_START = 0.7
 FIT_WINDOW_TICKS = 120           # fit the clock to the last two minutes of sightings
 # A power change only counts for the fit if the HUD was looked at this
 # shortly before (so the moment of the change is known to +- half of it).
@@ -231,9 +240,17 @@ class RealBody:
         if gap > SIGHTING_MAX_GAP:
             return   # noticed late: cannot tell when it happened
         changed_at = seen_at - gap / 2          # best guess: the middle of the gap
-        k = round((changed_at - self.t0) / self.scale)
-        if k < 1 or abs(changed_at - (self.t0 + k * self.scale)) > CLOCK_TRACK_WINDOW:
-            return   # nowhere near a charge: Foxy's bang or a misread
+        elapsed = (changed_at - self.t0) / self.scale
+        if elapsed < ORIGIN_SETTLES_AFTER:
+            # Early: the change can be up to EARLY_LATE_START before where
+            # the clock puts the charge (a late-noticed start), never much after.
+            k = math.floor(elapsed + EARLY_LATE_START)
+            if k < 1:
+                return
+        else:
+            k = round(elapsed)
+            if abs(changed_at - (self.t0 + k * self.scale)) > CLOCK_TRACK_WINDOW:
+                return   # nowhere near a charge: Foxy's bang or a misread
         self._power_sightings.append((k, changed_at))
         self._refit_clock()
 
@@ -251,10 +268,13 @@ class RealBody:
         sightings = [s for s in self._power_sightings if s[0] >= latest - FIT_WINDOW_TICKS]
         ticks = np.array([k for k, _ in sightings], dtype=float)
         seen = np.array([t for _, t in sightings])
+        early = latest <= ORIGIN_SETTLES_AFTER
         if len(sightings) < SCALE_MIN_SIGHTINGS or ticks[-1] - ticks[0] < SCALE_MIN_SPAN_TICKS:
-            # Too few for a slope: move the night start only.
+            # Too few for a slope: move the night start only (early in the
+            # night from all the sightings, robustly; later from the latest).
             new_scale = self.scale
-            new_t0 = float(np.median(seen[-3:] - ticks[-3:] * self.scale))
+            pick = slice(None) if early else slice(-3, None)
+            new_t0 = float(np.median(seen[pick] - ticks[pick] * self.scale))
         else:
             slope, intercept = np.polyfit(ticks, seen, 1)
             on_line = np.abs(seen - (slope * ticks + intercept)) < 0.08
@@ -269,14 +289,14 @@ class RealBody:
         # slope is taken as fitted; only the jump "now" is limited).
         old_at = self.t0 + latest * self.scale
         step = new_t0 + latest * new_scale - old_at
-        if abs(step) > CLOCK_MAX_STEP:
+        if abs(step) > CLOCK_MAX_STEP and not early:
             new_t0 = old_at + math.copysign(CLOCK_MAX_STEP, step) - latest * new_scale
-        if abs(new_scale - self.scale) > 0.0005:
+        if abs(new_scale - self.scale) > 0.0005 or (early and abs(new_t0 - self.t0) > 0.03):
             log.info("Clock: game second = %.4f real s (was %.4f), night start moved %+.3f s",
                      new_scale, self.scale, new_t0 - self.t0)
         self.scale, self.t0 = new_scale, new_t0
-        if latest <= ORIGIN_SETTLES_AFTER:
-            self.real_origin = self.t0      # early in the night both clocks agree
+        if early:
+            self.real_origin = self.t0      # the movement timers start with the power timer
 
     def _ensure_game(self, frame: np.ndarray | None = None) -> bool:
         """If someone switched away from the game, bring it back first.

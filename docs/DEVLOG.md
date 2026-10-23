@@ -1327,3 +1327,38 @@ line, the night start is corrected from the first sighting, and the slope
 is fitted from four sightings over 20 s. A test feeds it a sparse 4/20-like
 night with the guess 0.65 % off either way: locked on within 0.07 s by
 ~60 s, within 0.01 - 0.03 s after that. The starting guess is now 1.000 s.
+
+### Live 4/20 #26 (lost, power out at ~397 s) and #27 (lost to Bonnie at 30 s)
+
+**#26** ran with the first version of the tracking clock fit. The fit did
+start ("Clock fitted from 4 power changes" at ~90 s), but a few bad
+sightings - Foxy's bang (the bang drop was fed to the fit too), camera
+frames stamped long after they were grabbed - threw the night start
+around by 0.2 - 0.5 s several times, and every game time the brain had
+stored moved with it. Three Foxy runs, both doors shut ~95 s, out of power.
+Now the clock learns only from 1 % drops between two office frames stamped
+at grab time, outliers beyond 0.08 s are dropped, and after the first
+minute one sighting moves the clock at most 0.06 s.
+
+Also tried: Foxy alerts that look at the cove before shutting the left
+door (his fuse leaves ~7 s at an alert). Simulator, 120 4/20 nights: 113
+wins with it, 118 without - five Foxy losses instead of two. Reverted.
+Kept: a forced run is dated from the West Hall click, not from lowering
+the camera afterwards (119/120).
+
+**#27** was lost to Bonnie at ~30 s with 94 % power. The recording shows
+the left light at ~23 s on an empty doorway, and at ~29.6 s the light and
+door buttons already dead (she was in). Lining the bot's logged camera
+views up with the usage meter in the video: the bot's clock started
+0.35 - 0.52 s AFTER the first frame of the night (on #25: 0.02 s). Its
+model put every Bonnie tick that much late, and the light check meant to
+catch her came just after her tick. The power drops in the video were at
+exactly 8.0, 15.03, 19.0, 25.0 and 30.0 s after the first frame - so the
+true start was there to be read, but a 0.4 s error was outside the clock's
+0.2 s window and every early sighting was thrown away.
+
+Now, for the first 60 s, a power change is matched to the charge up to
+0.7 s AFTER it (the start is only ever noticed late), the night start is
+the median of all sightings so far with no step limit, and the movement
+timers' origin follows it. Test: a start noticed 0.4 or 0.6 s late is
+corrected at the first power change, the origin to within 0.04 s.

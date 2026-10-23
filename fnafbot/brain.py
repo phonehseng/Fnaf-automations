@@ -2078,15 +2078,20 @@ class Brain:
         # Both doors must be FULLY shut before a camera other than 4B shows.
         self.body.wait_until(max(self.body.now(), self.left.moving_until, self.right.moving_until))
         self.say("Making Foxy run now (viewing West Hall)", alert=True)
+        run_from = self.body.now()
         if self._raise_camera():
             self.body.select_camera("2A")
             self.camera_selected = "2A"
+            # He starts running on the frame West Hall is chosen.
+            run_from = getattr(self.body, "camera_clicked_at", self.body.now())
             self.body.wait_until(self.body.now() + 0.15)
             self._lower_camera()
         # He bangs on the closed door 100 frames after starting to run - and
-        # his timer starts again from there.
-        bang_at = self.body.now() + rules.FOXY_RUN_FRAMES * rules.FRAME
-        self.body.wait_until(bang_at + 0.6)
+        # his timer starts again from there. (Counted from lowering the
+        # camera, this was 0.3 - 0.5 s late; a measured bang corrects it,
+        # but his first bang of the night, 1 %, cannot be told from a charge.)
+        bang_at = run_from + rules.FOXY_RUN_FRAMES * rules.FRAME
+        self.body.wait_until(max(self.body.now(), bang_at + 0.6))
         self._foxy_timer_restarted(bang_at)
         self.foxy_emergency = False
         self.foxy_door_hold = False

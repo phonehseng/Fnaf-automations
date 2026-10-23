@@ -76,7 +76,7 @@ def test_game_second_scale_is_learned_from_power_changes():
     assert abs((1000.0 + 500 * true_scale - body.t0) / body.scale - 500) < 0.05
 
 
-def _sparse_power_night(true_scale: float, guess: float, seed: int):
+def _sparse_power_night(true_scale: float, guess: float, seed: int, late_start: float = 0.0):
     """A night as the bot sees it: the power display only changes when the
     battery crosses a whole percent (every 5 - 8 s at 4/20 drain), the HUD
     is looked at every 0.03 - 0.1 s while the bot is idle, now and then it
@@ -85,8 +85,8 @@ def _sparse_power_night(true_scale: float, guess: float, seed: int):
     from fnafbot import body as body_module
 
     body = body_module.RealBody.__new__(body_module.RealBody)
-    body.t0 = 1000.0
-    body.real_origin = 1000.0
+    body.t0 = 1000.0 + late_start          # the first frame noticed late
+    body.real_origin = body.t0
     body.scale = guess
     body._power_sightings = []
     body._fitted = False
@@ -115,6 +115,17 @@ def test_power_clock_follows_sparse_changes():
             assert max(abs(e) for k, e in errors if k >= 40) < 0.12, (true_scale, guess, seed)
             assert max(abs(e) for k, e in errors if k >= 100) < 0.05, (true_scale, guess, seed)
             assert abs(body.scale - true_scale) < 0.001
+
+
+def test_late_noticed_night_start_is_corrected():
+    """Live 4/20 #27 started its clock 0.4 s after the first frame (OBS
+    recording) and lost to Bonnie. The first minute of power changes must
+    move both the clock and the movement timers' origin to the real start."""
+    for late in (0.1, 0.4, 0.6):
+        for seed in range(4):
+            body, errors = _sparse_power_night(1.0, 1.0, seed, late_start=late)
+            assert max(abs(e) for k, e in errors if k >= 30) < 0.08, (late, seed)
+            assert abs(body.real_origin - 1000.0) < 0.06, (late, seed, body.real_origin - 1000.0)
 
 
 def test_power_misreads_are_ignored():
