@@ -194,6 +194,15 @@ WARMUP_CYCLE_SECONDS = (2 * 0.03 + 0.45 + 0.15 + 0.45 + 0.15 + 2 * 0.26 + 0.3)
 # See Brain._foxy_lag_allowance.
 FOXY_LAG_CAP = 0.3
 
+# Look at Pirate Cove at least this often, whenever the right door is shut
+# anyway (for Chica) - then no door has to be shut for Freddy and the look
+# costs only the camera. Foxy's tick bookkeeping is not enough on its own:
+# on live 4/20 #9 and #16 he reached stage 3 and ran while every flip had
+# been logged as covering his ticks, and with Freddy on 4B no cove check
+# had happened for minutes.
+COVE_LOOK_EVERY = 30.0
+COVE_LOOK_SECONDS = 2.2       # raise, switch to the cove, read, back to 4B, lower
+
 # After someone was seen on 4B, assume it stays blocked this long before
 # planning another routine cove check.
 FOUR_B_BUSY_SECONDS = 20.0
@@ -948,6 +957,14 @@ class Brain:
                 return job        # cannot wait for the flip: safety first
             # Otherwise do the flip first; the check fits afterwards.
 
+        # 3b) A cheap look at Pirate Cove while the right door happens to be
+        # fully shut anyway (for Chica): Freddy cannot get in, so no door
+        # has to be shut for it (see COVE_LOOK_EVERY).
+        if (now - self.foxy_verified_at > COVE_LOOK_EVERY and not self.foxy_emergency
+                and self.right.door_closed and now >= self.right.moving_until
+                and self.right.close_at is None and nothing_late(COVE_LOOK_SECONDS)):
+            return self._cove_look_while_right_shut
+
         # 4) The Foxy flip.
         if freeze_start is not None and hard and freeze_end + 0.05 > next_hard:
             # The flip would run into a planned door click: shut that door
@@ -1654,6 +1671,20 @@ class Brain:
         if view["occupants"]:
             self.four_b_busy_at = self.body.now()
         return not view["occupants"]
+
+    def _cove_look_while_right_shut(self) -> None:
+        """Look at Pirate Cove now - the right door is shut, so a camera
+        other than 4B is safe (Freddy only gets in through an open right
+        door). Covers Foxy's next tick on the way down, like any flip."""
+        if not self._raise_camera():
+            return
+        stage = self._look_at_cove()
+        self._lower_camera_covering_foxy()
+        if stage is None:
+            self.foxy_verified_at = self.body.now() - COVE_LOOK_EVERY + 5.0   # try again soon
+            return
+        if stage >= 3:
+            self._foxy_emergency()
 
     def _look_at_cove(self) -> int | None:
         """View Pirate Cove (caller guarantees it is safe) and update Foxy.

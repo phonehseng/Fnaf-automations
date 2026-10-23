@@ -1055,3 +1055,26 @@ the lights went out for Bonnie, and he has gone. (Also tried: refusing a
 blind reopen whenever a Foxy flip would pull its closing click forward -
 far worse in the simulator, 7/40 4/20 nights; short reopens still save
 power on balance.)
+
+### Live 4/20 #16 (20:59): Foxy at ~246 s, 57 % power
+
+The best power yet (80 % at 121 s, 58 % at 241 s) - and Foxy ran in at
+~246 s (OBS frames). The bot believed him at stage 1 at most: one cove
+look at 9.5 s (stage 0), two uncovered ticks since, every other flip
+logged as covering his tick. Same story as #9. Under the decompiled rules
+a tick a little after a flip cannot move him (the lock lasts at least 50
+frames after the monitor comes down) - but a tick a little BEFORE one
+can (four seconds after the previous view the lock has run out about one
+time in five). Why his ticks would fall before the flips on live 4/20
+nights is not understood; the Foxy-vs-Chica measurement says his timer
+lags like the others.
+
+Guard that does not depend on the answer: with Freddy on 4B the routine
+cove checks never happen (they need 4B clear), so the bot had not looked
+at the cove for 236 s. Now, whenever the right door is fully shut anyway
+(for Chica - several times a minute on 4/20) and the cove has not been
+seen for 30 s, the bot looks at it - Freddy cannot get in through a shut
+door, so it costs only the camera. A stage 3 there goes straight to the
+existing emergency (both doors shut, make him run at the shut door).
+Simulator, 40 nights each: 4/20 30/40 (was 23), 6th Night 32/40, Night 5
+34/40; nobody got in on any.
