@@ -32,6 +32,8 @@ from fnafbot.vision import Vision
 
 log = logging.getLogger(__name__)
 
+BANG_MIN_DROP = 4      # power drop (%) in one reading that can only be Foxy's bang
+
 # How long the HUD must be missing before we decide the night has ended
 # (6 AM screen, a jumpscare, or the power-out sequence). Animations and the
 # display switch after a tab-out can hide it briefly, so be patient.
@@ -329,12 +331,14 @@ class RealBody:
             hud = replace(hud, power=None)      # a misread: keep the last good value
         if hud.power is not None:
             if self.last_power is not None and hud.power < self.last_power:
-                # A drop between the whole-second charges, or of 2 % or more
-                # at once (a charge never takes more than 1 %), is Foxy's bang
-                # on the shut left door (event [324]).
+                # A drop of BANG_MIN_DROP % or more at once is Foxy's bang on
+                # the shut left door (event [324]): his bangs cost 1, 6, 11 ...
+                # %, and a charge only 1 %. His FIRST bang (1 %) looks just
+                # like a charge - on live 4/20 #24 the charges came at any
+                # point of the second (the drain timers lag too), so a "drop
+                # between whole seconds" rule read every charge as a bang.
                 at = self.now()
-                between = 0.2 < at - int(at) < 0.8
-                if between or self.last_power - hud.power >= 2:
+                if self.last_power - hud.power >= BANG_MIN_DROP:
                     self.bangs.append(at)
                     log.info("power %d%% -> %d%% at %.2f s: Foxy's bang", self.last_power, hud.power, at)
             if self.last_power is not None and hud.power != self.last_power:

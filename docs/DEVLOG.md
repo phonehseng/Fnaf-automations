@@ -1269,3 +1269,13 @@ Two faults in the new Foxy model, both found in the #23 log:
 
 Simulator, 60 nights each: 4/20 60/60 (13.7 % left), 6th Night 60/60,
 Night 5 57/60 (3 out of power - unchanged).
+
+### Live 4/20 #24: every charge read as a bang (stopped at 30 s)
+
+The bang rule "a 1 % drop away from the whole second" assumed the power
+charges land on whole seconds. They don't - the drain timers lag like the
+others - so at 14.6, 20.8 and 26.6 s three ordinary charges were taken for
+bangs, each resetting the bot's picture of Foxy. Stopped the night. Now
+only a drop of 4 % or more in one reading counts (his bangs cost 1, 6, 11
+... %): his first bang of the night is not measured, the later ones are.
+Simulator: 4/20 60/60 (13.4 %), 6th Night 57/60.

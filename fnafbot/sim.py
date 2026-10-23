@@ -416,7 +416,8 @@ class NightSim:
                 self.foxy_stage = self.rng.randint(0, 1)
                 self.foxy_stage3_frames = 0
                 self.log(f"Foxy banged on the door (-{cost / 10:.0f}%)")
-                self.bang_times.append(self.now)
+                if cost >= 10 * 4:         # the body only tells bangs of 4 % or more (body.BANG_MIN_DROP)
+                    self.bang_times.append(self.now)
 
 
 # ---------------------------------------------------------------------------
