@@ -1689,9 +1689,19 @@ class Brain:
     # Foxy and the camera
     # ------------------------------------------------------------------
 
+    def _foxy_flip_search_from(self, now: float) -> float:
+        """The earliest of Foxy's ticks a flip started now can still cover:
+        one whose LATEST possible moment (the lag range after the model's
+        earliest one) is still after the picture can be up. Looking only at
+        ticks after now silently dropped every flip that ran late - on live
+        4/20 #20 a blind reopen and Chica's checks pushed the flip past his
+        earliest tick each cycle, and he went 25 s without a single flip."""
+        reach = self.body.camera_up_seconds + FOXY_CLOCK_MARGIN
+        return now + reach - FOXY_PHASE_SPREAD - self._foxy_lag_allowance(now)
+
     def _next_freeze_start(self, now: float) -> float | None:
         """When to start raising the camera for the next Foxy tick (or None)."""
-        tick = self._next_tick("foxy",max(now, self.foxy_frozen_tick + 0.01))
+        tick = self._next_tick("foxy", max(self._foxy_flip_search_from(now), self.foxy_frozen_tick + 0.01))
         if self.ai(tick)["foxy"] == 0 or self.foxy_emergency or not self._foxy_can_attack(now):
             return None
         # Camera picture showing during [view_start, view_end], ending close
@@ -1817,7 +1827,7 @@ class Brain:
     def _freeze_foxy(self) -> None:
         """Short camera flip just before Foxy's tick, so his lock is running."""
         now = self.body.now()
-        tick = self._next_tick("foxy",max(now, self.foxy_frozen_tick + 0.01))
+        tick = self._next_tick("foxy", max(self._foxy_flip_search_from(now), self.foxy_frozen_tick + 0.01))
         self.foxy_frozen_tick = tick
         cove_check = self._cove_check_due()
         self.say("Camera flip: checking Foxy" if cove_check else "Camera flip to hold Foxy (resting on 4B)")

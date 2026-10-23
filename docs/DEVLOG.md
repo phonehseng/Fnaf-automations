@@ -1149,3 +1149,31 @@ otherwise the ticks he still needs plus the fuse - and if that is after
 6 AM the bot stops flipping for him, stops alerting, and does not make him
 run (Freddy needs no flips with the monitor down). Simulator, 60 nights:
 4/20 60/60 (12.1 %), 6th Night 56/60, Night 5 54/60.
+
+### Live 4/20 #20 (21:50) and why Foxy kept climbing on 4/20 nights
+
+#20 ran out of power at ~450 s (two Foxy runs 32 s apart, the second bang
+6 %). Foxy again climbed from stage 0/1 to 3 in about 30 s while the bot
+believed it was flipping for him.
+
+Two experiments with Foxy alone (Custom 0/0/0/20):
+
+* the bot itself, flipping on every tick: he gained one stage in ~45 s;
+* `tools/foxy_flip_offset.py`: flips placed 0, 2.5 and 1.25 s after his
+  computed tick, cove read every third flip - 1 stage in 15 ticks at 0,
+  none in 18 at 2.5, none in 18 at 1.25 (the lock a picture sets lasts
+  50 + Random(1000) frames, 9 s on average, so ANY regular flipping holds
+  him well).
+
+So on his own he barely moves. On 4/20 the log of #20 shows why he did:
+between his run at 354 s and the next alert at 381 s there was not one
+camera flip. Each cycle, Chica's checks and a blind reopen of Bonnie's
+door ran first, Bonnie's planned click was then made "before camera flip"
+- but already after Foxy's earliest tick (363.90 vs 363.41 s, 368.85 vs
+368.40 s) - and the flip planner, which only ever aimed at ticks still in
+the future, quietly moved on to the next one. 25 s with no flip.
+
+Fix: a flip that is late still covers the current tick if his LATEST
+possible moment (the lag range after the earliest) is still ahead of the
+picture (`Brain._foxy_flip_search_from`). Simulator, 60 nights: 4/20 59/60
+(12.6 %), 6th Night 57/60, Night 5 52/60; nobody got in.
