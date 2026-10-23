@@ -54,8 +54,10 @@ SIGHTING_MAX_GAP = 0.12
 
 # Write the power left to the log this often (night seconds).
 POWER_LOG_EVERY = 30.0
-# See RealBody._power_reading_ok (seconds).
-POWER_MISREAD_PATIENCE = 2.0
+# See RealBody._power_reading_ok (seconds): an "impossible" value is only
+# believed after it has stayed this long (a lost leading digit can stay for
+# seconds - "98 % -> 9 %" for 2 s on a test night).
+POWER_MISREAD_PATIENCE = 10.0
 # Warn when a timed wait ends this much later than asked.
 WAIT_OVERSHOOT_WARN = 0.15
 # Flip request -> camera picture readable, measured on the live game

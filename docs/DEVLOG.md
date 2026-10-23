@@ -1196,3 +1196,26 @@ animatronic "possibly there" (not seen); a Chica watch then read a
 lights-out as that one leaving - it was Bonnie arriving. That conclusion
 now needs a real sighting. Simulator, 60 nights: 4/20 60/60 (12.9 %), 6th
 Night 55/60, Night 5 55/60; nobody got in.
+
+### The power misreads, found: the left door's hazard stripes
+
+A capture of the HUD while the night was on: "Power left: 21 %" sitting
+right over the orange-and-black hazard stripes the shut LEFT door paints on
+screen. Against them the "1" matched its template at 0.88, under the 0.90
+threshold, so 21 % read as 2 % - whenever the left door was shut, which is
+why the misreads came in runs, sometimes for seconds (they fed false power
+changes to the clock fit, false bangs to the measurement tools, and
+"4 % at 301 s" to the logs). The power digits are now matched on their
+white pixels only (text and templates turned into white/not-white masks):
+on 60 frames from the recordings the new reader fixed both misreads (51 and
+46 %) and agreed everywhere else; a test draws "21" over stripes. The
+misread filter now wants 10 s of persistence before it believes an
+"impossible" value.
+
+Also started: `tools/foxy_pause_test.py`. Foxy's tick event checks
+"viewing != 99" (99 = Pirate Cove, event [141]) and "fox progress < 3"
+BEFORE its "every 5.01 s" timer; if the timer only counts while it is
+evaluated, every look at the cove pauses it - and the bot's fixed-phase
+model of his ticks drifts by the length of every cove look. The test holds
+the cove on screen for set times between bangs and measures how far his
+phase moves. Its first two runs were spoiled by the misreads above.

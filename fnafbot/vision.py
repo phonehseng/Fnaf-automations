@@ -76,6 +76,10 @@ PAN_STRIP = (18, 150, 0, 200)
 
 # Template-match score needed to accept a HUD digit / label (1.0 = perfect).
 DIGIT_MIN_SCORE = 0.90
+# Matching only the white text (see _read_digits): a pixel brighter than
+# this in all three colours is text; the threshold for those masks.
+WHITE_TEXT_LEVEL = 170
+WHITE_DIGIT_MIN_SCORE = 0.8
 LABEL_MIN_SCORE = 0.85
 
 
@@ -176,14 +180,31 @@ def _camera_mask() -> np.ndarray:
     return mask
 
 
-def _read_digits(region: np.ndarray, font: dict[int, np.ndarray]) -> int | None:
-    """Find the digits of ``font`` inside ``region`` and return them as a number."""
+def _white(image: np.ndarray) -> np.ndarray:
+    """Only the near-white pixels (the HUD's text), as a black/white mask."""
+    return ((image[:, :, :3].min(axis=2) > WHITE_TEXT_LEVEL).astype(np.uint8) * 255)
+
+
+def _read_digits(region: np.ndarray, font: dict[int, np.ndarray], white_only: bool = False) -> int | None:
+    """Find the digits of ``font`` inside ``region`` and return them as a number.
+
+    ``white_only`` matches only the white text against the white of the
+    templates. The power readout sits over the orange-and-black hazard
+    stripes the shut left door paints on screen, and against those the
+    plain match of a "1" scored 0.88 - under the threshold - so "21 %" was
+    read as "2 %", dozens of times a night (it fed wrong power changes to the
+    clock fit and wrong numbers to the log)."""
+    if white_only:
+        region = _white(region)
+    threshold = WHITE_DIGIT_MIN_SCORE if white_only else DIGIT_MIN_SCORE
     hits: list[tuple[int, int, float]] = []  # (x position, digit, score)
     for digit, template in font.items():
         if region.shape[0] < template.shape[0] or region.shape[1] < template.shape[1]:
             continue
+        if white_only:
+            template = _white(template)
         scores = cv2.matchTemplate(region, template, cv2.TM_CCOEFF_NORMED)
-        ys, xs = np.nonzero(scores >= DIGIT_MIN_SCORE)
+        ys, xs = np.nonzero(scores >= threshold)
         hits.extend((int(x), digit, float(scores[y, x])) for y, x in zip(ys, xs))
     if not hits:
         return None
@@ -310,7 +331,7 @@ class Vision:
             return Hud(visible=False)
         return Hud(
             visible=True,
-            power=_read_digits(frame[615:655, 150:245], self.power_font),
+            power=_read_digits(frame[615:655, 150:245], self.power_font, white_only=True),
             usage=self._count_usage_bars(frame),
             hour=_read_digits(frame[22:66, 1110:1200], self.clock_font),
             night=_read_digits(frame[66:94, 1210:1250], self.night_font),

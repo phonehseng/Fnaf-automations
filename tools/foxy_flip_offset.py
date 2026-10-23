@@ -15,7 +15,12 @@ the tick the model computes, and every third flip also looks at Pirate
 Cove to read his stage. The number of stages he gains per tick, per offset,
 shows where his real tick is.
 
-usage: python tools/foxy_flip_offset.py [--ticks 12] [--offsets 0 2.5 1.25 3.75]
+With --chica, Chica is active too (AI 20) and both doors stay shut all
+night: does her moving around break Foxy's lock? (The lock lives on the
+Chica object - chica.AltM - and an object condition is true if ANY of its
+instances passes it.)
+
+usage: python tools/foxy_flip_offset.py [--ticks 12] [--offsets 0 2.5 1.25 3.75] [--chica]
 """
 
 from __future__ import annotations
@@ -43,14 +48,20 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--ticks", type=int, default=12, help="flips per offset segment")
     parser.add_argument("--offsets", type=float, nargs="+", default=[0.0, 2.5, 1.25, 3.75])
+    parser.add_argument("--chica", action="store_true")
     args = parser.parse_args()
 
     window = menu.open_game()
     vision = Vision()
     ctl = Controller(window, vision)
-    menu.choose(window, "custom", {"freddy": 0, "bonnie": 0, "chica": 0, "foxy": 20})
+    menu.choose(window, "custom", {"freddy": 0, "bonnie": 0, "chica": 20 if args.chica else 0, "foxy": 20})
     body = RealBody(ctl, vision)
     body.start_clock()
+    if args.chica:
+        ctl.face(RIGHT)
+        time.sleep(0.4)
+        ctl.press(layout.RIGHT_DOOR_BUTTON)      # Chica cannot get in
+        time.sleep(0.6)
     ctl.face(LEFT)
     time.sleep(0.4)
     ctl.press(layout.LEFT_DOOR_BUTTON)          # shut all night: a run is only a bang

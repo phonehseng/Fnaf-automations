@@ -81,6 +81,27 @@ def test_hud_digits_roundtrip(vision):
     assert hud.power == 57
 
 
+def test_hud_digits_over_door_stripes(vision):
+    """The power readout sits over the hazard stripes a shut left door paints
+    on screen; the text's own background is see-through there. '21' over
+    orange-and-black stripes used to read as '2' (live 4/20 nights)."""
+    frame = np.zeros((720, 1280, 3), np.uint8)
+    ys, xs = np.mgrid[600:670, 140:260]
+    orange = ((xs + ys) // 12) % 2 == 0
+    frame[600:670, 140:260][orange] = (0, 90, 230)          # BGR orange stripes on black
+    for i, digit in enumerate([2, 1]):
+        sprite = assets.load(catalog.POWER_FONT[digit])[:, :, :3]
+        text = sprite.min(axis=2) > 170                     # only the white text is drawn
+        x = 185 + 18 * i
+        area = frame[624:624 + sprite.shape[0], x:x + sprite.shape[1]]
+        area[text] = sprite[text]
+    usage = assets.load(catalog.USAGE_LABEL)
+    frame[667:667 + usage.shape[0], 38:38 + usage.shape[1]] = usage
+    hud = vision.read_hud(frame)
+    assert hud.visible
+    assert hud.power == 21
+
+
 def test_camera_label(vision):
     """Every room-name label is recognised where the game draws it."""
     for handle, camera in catalog.CAMERA_NAME_LABELS.items():
