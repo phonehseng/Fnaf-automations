@@ -194,6 +194,10 @@ WARMUP_CYCLE_SECONDS = (2 * 0.03 + 0.45 + 0.15 + 0.45 + 0.15 + 2 * 0.26 + 0.3)
 # See Brain._foxy_lag_allowance.
 FOXY_LAG_CAP = 0.3
 
+# Foxy is only a threat if his fuse can end this long after 6 AM at the
+# latest (see Brain._foxy_can_attack) - a margin for the clocks.
+FOXY_END_MARGIN = 2.0
+
 # Look at Pirate Cove at least this often, whenever the right door is shut
 # anyway (for Chica) - then no door has to be shut for Freddy and the look
 # costs only the camera. Foxy's tick bookkeeping is not enough on its own:
@@ -358,6 +362,7 @@ class Brain:
         self.foxy_alert_retry_at = 0.0     # earliest time for another Foxy alert attempt
         self.four_b_busy_at = -1e9         # when 4B was last seen occupied (blocks cove checks)
         self.foxy_fuse_from = math.inf     # earliest moment Foxy may have reached stage 3
+        self.foxy_below3_seen_at = 0.0     # last time he was SEEN below stage 3 (his fuse started after it)
         self.view_intervals: list[tuple[float, float]] = []   # when a camera picture showed
         # Measured lag of the movement timers: (night time, lag) samples, and
         # the floor the tick model uses (see LAG_NOISE).
@@ -871,6 +876,7 @@ class Brain:
         # possible stage 3 leaves time for a cheap look on a normal flip;
         # the full alert (doors shut, look) only runs near the fuse's end.
         if (self.foxy_max_stage >= 3 and not self.foxy_emergency and now >= self.foxy_alert_retry_at
+                and self._foxy_can_attack(now)
                 and now >= self.foxy_fuse_from + FOXY_FUSE_SECONDS - FOXY_ALERT_LEAD):
             for watch in (self.left, self.right):
                 if (self._door_check_needed(watch)
@@ -1686,7 +1692,7 @@ class Brain:
     def _next_freeze_start(self, now: float) -> float | None:
         """When to start raising the camera for the next Foxy tick (or None)."""
         tick = self._next_tick("foxy",max(now, self.foxy_frozen_tick + 0.01))
-        if self.ai(tick)["foxy"] == 0 or self.foxy_emergency:
+        if self.ai(tick)["foxy"] == 0 or self.foxy_emergency or not self._foxy_can_attack(now):
             return None
         # Camera picture showing during [view_start, view_end], ending close
         # to the tick but before the lock from the last re-lock runs out.
@@ -1779,7 +1785,7 @@ class Brain:
         if stage is None:
             self.foxy_verified_at = self.body.now() - COVE_LOOK_EVERY + 5.0   # try again soon
             return
-        if stage >= 3:
+        if stage >= 3 and self._foxy_can_attack(self.body.now()):
             self._foxy_emergency()
 
     def _look_at_cove(self) -> int | None:
@@ -1802,6 +1808,7 @@ class Brain:
         self.foxy_stage = self.foxy_max_stage = view["foxy_stage"]
         if self.foxy_stage < 3:
             self.foxy_fuse_from = math.inf
+            self.foxy_below3_seen_at = self.body.now()
         self.foxy_verified_at = self.body.now()
         return self.foxy_stage
 
@@ -1858,6 +1865,25 @@ class Brain:
             planned_end = 0.0
         return max(self.body.now(), self._view_started + FREEZE_VIEW_SECONDS, planned_end,
                    max(first_relock, covering_relock) + 0.1 + FOXY_CLOCK_MARGIN)
+
+    def _foxy_can_attack(self, now: float) -> bool:
+        """Could Foxy still reach the office before 6 AM? He attacks only
+        1500 frames (~25 s) after reaching stage 3 - so near the end of the
+        night a Foxy who cannot climb to stage 3 AND sit out that fuse in
+        time is harmless, and every flip, alert and forced run for him is
+        wasted power. (Live 4/20 #19 ran out of power 40 s before 6 AM after
+        four Foxy alerts and two runs in its last three minutes - the last
+        run, at 490 s, could not have reached the door before 6 AM anyway.)"""
+        end = rules.NIGHT_SECONDS + FOXY_END_MARGIN
+        if self.foxy_max_stage >= 3:
+            start = self.foxy_below3_seen_at
+            if self.foxy_fuse_from != -math.inf:
+                start = max(start, min(self.foxy_fuse_from, now))
+            return start + FOXY_FUSE_SECONDS < end
+        t = now
+        for _ in range(3 - self.foxy_max_stage):     # one stage per tick of his, at best
+            t = self._next_tick("foxy", t)
+        return t + FOXY_FUSE_SECONDS < end
 
     def _cove_check_due(self) -> bool:
         """Look at Pirate Cove on this flip? Only when it is worth the time:
@@ -1921,7 +1947,7 @@ class Brain:
         self._after_cove_check(stage)
 
     def _after_cove_check(self, stage: int) -> None:
-        if stage >= 3:
+        if stage >= 3 and self._foxy_can_attack(self.body.now()):
             self._foxy_emergency()
         elif self.foxy_door_hold:
             self.foxy_door_hold = False

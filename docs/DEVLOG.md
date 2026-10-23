@@ -1133,3 +1133,19 @@ count as passed once the measured lag range is behind them, and a
 departure taken on trust is still checked with the light before their
 next tick. Simulator, 60 nights: 4/20 60/60 with 11.9 % left (was 56/60,
 8.2 %); the 6th Night and Night 5 unchanged (their AI is below 20).
+
+### Live 4/20 #19 (21:37): out of power 40 s before 6 AM
+
+The closest yet: with the AI-20 shortcut the left door was shut 46 s by
+395 s (it was 138 s by 402 s on #18), and the power ledger read 61 % at
+212 s, 50 % at 273 s, 40 % at 333 s - on course to finish with ~8 %. Then
+Foxy: four alerts and two runs in the last 170 s (the second bang 6 %),
+and the battery ran out at ~495 s. Nobody got in.
+
+Most of that Foxy work could not have mattered: he attacks only 1500
+frames (~25 s) after reaching stage 3. `Brain._foxy_can_attack` works out
+the earliest moment he could reach the office - his fuse end at stage 3,
+otherwise the ticks he still needs plus the fuse - and if that is after
+6 AM the bot stops flipping for him, stops alerting, and does not make him
+run (Freddy needs no flips with the monitor down). Simulator, 60 nights:
+4/20 60/60 (12.1 %), 6th Night 56/60, Night 5 54/60.
