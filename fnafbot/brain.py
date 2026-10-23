@@ -144,7 +144,10 @@ LAG_SPREAD_MAX = 0.95
 # low (door clicks come early, the safe side); a sample replaces both.
 LAG_SETTLED_AFTER = 90.0
 LAG_SETTLED_LO = 0.45
-LAG_SETTLED_HI = 1.0
+LAG_SETTLED_HI = 0.8
+# ... and on a live 4/20 night it keeps creeping up after that (0.97 s by
+# 416 s on #12), so the upper end grows this much per second.
+LAG_SETTLED_GROWTH = 0.0015
 # The lamp is read this long after it really goes dark (one screen grab).
 LAMP_SEEN_DELAY = 0.02
 # A departure watch (see _watch_leave) has the light on and confirmed lit
@@ -430,9 +433,10 @@ class Brain:
     def _lag_spread(self, at: float) -> float:
         """How much later than the tick model a tick at night time ``at``
         may come (see LAG_NOISE)."""
+        if at >= LAG_SETTLED_AFTER and not self._settled_samples():
+            high = LAG_SETTLED_HI + LAG_SETTLED_GROWTH * (at - LAG_SETTLED_AFTER)
+            return max(0.0, high - self.lag_lo)
         if not self.lag_samples:
-            if at >= LAG_SETTLED_AFTER:
-                return max(0.0, LAG_SETTLED_HI - self.lag_lo)
             return min(LAG_SPREAD_MAX, LAG_PRIOR + LAG_PRIOR_GROWTH * max(0.0, at - LAG_PRIOR_QUIET))
         recent = [self.lag_samples[-1][2]]       # the latest sample's upper end
         last = self.lag_samples[-1][0]
@@ -451,6 +455,14 @@ class Brain:
         of power); a missed tick moves Foxy one stage at most, which the
         bot's stage-3 alert is there for."""
         return min(self._lag_spread(tick), FOXY_LAG_CAP)
+
+    def _settled_samples(self) -> list[tuple[float, float, float]]:
+        """Lag samples taken after the lag has settled (LAG_SETTLED_AFTER).
+        An earlier one says little about the rest of the night: the lag is
+        still building then (live 4/20 #12: 0.16 s at 35 s, its only sample,
+        held the floor ~0.35 s below the ~0.5 s it settles at - and every
+        Foxy flip then looked late on the model, five false Foxy alerts)."""
+        return [sample for sample in self.lag_samples if sample[0] >= LAG_SETTLED_AFTER]
 
     def _raise_lag_floor(self, new_lo: float, allow_lower: bool = False) -> None:
         """The timers are at least ``new_lo`` late (it never shrinks).
@@ -486,9 +498,9 @@ class Brain:
             return None
         lag, high = min(lags), max(lags)
         self.lag_samples.append((seen_at, lag, high))
-        if len(self.lag_samples) == 1:
-            # The first sample replaces the assumed floor (LAG_SETTLED_LO),
-            # even downwards. (Moving the bookkeeping marks back can only
+        if len(self.lag_samples) == 1 or (seen_at >= LAG_SETTLED_AFTER and len(self._settled_samples()) == 1):
+            # The first sample - and the first one after the lag has settled
+            # - replaces the assumed floor (LAG_SETTLED_LO), even downwards. (Moving the bookkeeping marks back can only
             # count a tick twice - one extra check, never a missed one.)
             self._raise_lag_floor(lag - LAG_NOISE, allow_lower=True)
         else:
@@ -546,7 +558,7 @@ class Brain:
     # ------------------------------------------------------------------
 
     def _account_for_ticks(self, now: float) -> None:
-        if not self.lag_samples and now >= LAG_SETTLED_AFTER:
+        if now >= LAG_SETTLED_AFTER and not self._settled_samples():
             self._raise_lag_floor(LAG_SETTLED_LO)      # see LAG_SETTLED_AFTER
         # A tick only counts as passed once the clock is certainly past it;
         # otherwise a doorway check could run just BEFORE the real tick and

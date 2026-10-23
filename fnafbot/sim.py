@@ -44,10 +44,10 @@ CAMERA_DISRUPTION_FRAMES = 300
 # Two parts, both drawn per night, as measured on cold-started nights: a
 # jump to 0.5 - 0.85 s in the first minute and a half, and a small drift
 # after that.
-TIMER_LAG_JUMP = (0.4, 1.0)
+TIMER_LAG_JUMP = (0.3, 0.8)
 TIMER_LAG_START = (15.0, 35.0)       # seconds into the night the jump starts
 TIMER_LAG_BUILDUP = (10.0, 30.0)     # its time constant, seconds
-MAX_TIMER_LAG_RATE = 0.0008          # the drift, seconds per second ...
+MAX_TIMER_LAG_RATE = 0.0015          # the drift, seconds per second (live 4/20 #12: ~0.0015) ...
 TIMER_LAG_DRIFT_FROM = (60.0, 160.0)  # ... from this far into the night
 # Timers that run on the game's "every N seconds" clock and so share the lag.
 LAGGING_TIMERS = ("bonnie", "chica", "freddy", "foxy", "relock")

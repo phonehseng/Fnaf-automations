@@ -990,3 +990,24 @@ fits its game clock to (the +1.46 s jump of the night start on live #10).
 `RealBody._power_reading_ok` now rejects readings that go up, drop more
 than 20 %, or fall from two digits to one (except 10 -> 9) - unless the
 same value comes back five times in a row (a real bang drop).
+
+### Live 4/20 #12 (20:22): out of power at ~422 s
+
+Nobody got in; the battery ran out (79 % at 122 s, 50 % at 243 s, 22 % at
+335 s). Its lag samples: 0.16 - 0.23 s at 35 s, then nothing until 356 s
+(0.25 or 0.97, ambiguous) and 416 s (0.97, Chica) - so on a live 4/20
+night the lag keeps creeping up, to ~1 s by 400 s. Where the power went:
+nine Foxy alerts (left door shut, cove look) and 34 "checking Foxy" flips
+(only 7 reached the cove - Freddy sits on 4B), all from eleven Foxy ticks
+counted as uncovered. Three cove looks showed him really at stage 2 the
+whole time - false alarms. The cause: the bot's only early sample (0.16 s
+at 35 s, while the lag was still building) held its tick model ~0.35 s
+early for the rest of the night, so flips that started in time for the
+real ticks looked late on the model.
+
+Changes: a sample taken before the lag has settled (90 s) no longer holds
+the floor down after that - until a later sample, the floor is 0.45 s and
+the top 0.8 s + 0.0015 s per second after 90 s (1.27 s by 400 s, matching
+#12). The simulator's lag drift goes up to 0.0015 s/s to match. (Simulator:
+no change either way within noise - it does not reproduce the false Foxy
+alarms; the live night is the test.)
