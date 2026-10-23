@@ -167,6 +167,22 @@ class Session:
         return survived
 
 
+def _only_copy_running() -> bool:
+    """Claim a system-wide name, so a second copy of the bot cannot start.
+
+    Two copies once ran at the same time (a test series started twice):
+    both clicked in the same game window and one closed the game under the
+    other between nights - three "lost" nights that said nothing about the
+    bot (docs/DEVLOG.md). The name is held until this process ends."""
+    import win32api
+    import win32event
+    import winerror
+
+    global _MUTEX
+    _MUTEX = win32event.CreateMutex(None, False, "fnafbot-single-copy")
+    return win32api.GetLastError() != winerror.ERROR_ALREADY_EXISTS
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--setup", action="store_true", help="extract reference pictures from the game (one time)")
@@ -179,6 +195,8 @@ def main() -> None:
     parser.add_argument("--nights", type=int, help="stop after this many nights")
     args = parser.parse_args()
 
+    if not _only_copy_running():
+        sys.exit("Another copy of the bot is already running - not starting a second one.")
     log_path = setup_logging()
     if args.setup:
         count = assets.extract_all()

@@ -1377,3 +1377,16 @@ change, ~7 s in) and fitting the game second (0.9995 real s):
 5 % ahead of #25 at 3 AM and 12 % ahead at 5 AM. Left door 49 s in all
 (#25: 74 s), right 32 s, camera 54 s; 3 Foxy alerts (#25: 6), no runs.
 One win is not "repeatable" yet - more nights follow.
+
+### campaign48 - 50: void (two copies of the bot at once)
+
+A five-night series was started twice by mistake (stopping the first
+watcher did not stop its loop). From campaign48 on, two bots clicked in the
+same game window and wrote the same log files, and between nights one of
+them closed the game under the other: the monitor "did not come up", the
+lights "did not come on", Freddy walked in at 48 s, and the game window
+vanished. These three "losses" say nothing about the bot. Two things came
+out of them anyway: the bot now refuses to start while another copy runs
+(a system-wide name, `_only_copy_running`), and the first minute's clock
+fit became a Theil-Sen line (median slopes and start), which one bad power
+sighting cannot drag - campaign48 had moved the night start 0.58 s.
