@@ -18,6 +18,7 @@ The night clock
 from __future__ import annotations
 
 import ctypes
+from dataclasses import replace
 import logging
 import time
 
@@ -53,6 +54,8 @@ SIGHTING_MAX_GAP = 0.12
 
 # Write the power left to the log this often (night seconds).
 POWER_LOG_EVERY = 30.0
+# See RealBody._power_reading_ok.
+POWER_MISREAD_PATIENCE = 5
 # Warn when a timed wait ends this much later than asked.
 WAIT_OVERSHOOT_WARN = 0.15
 # Flip request -> camera picture readable, measured on the live game
@@ -129,6 +132,8 @@ class RealBody:
         self.hud_missing_since: float | None = None   # first look that found no HUD
         self.hud_missing_count = 0                     # looks in a row without the HUD
         self.last_power: int | None = None
+        self._odd_power: int | None = None      # an unbelievable power reading seen lately ...
+        self._odd_count = 0                     # ... this many times in a row
         self.over = False
         self.facing: str | None = None
         # Alternate between two click spots per button (see layout.py note on
@@ -278,6 +283,34 @@ class RealBody:
             return True
         return False
 
+    def _power_reading_ok(self, power: int) -> bool:
+        """Is this power reading believable after the last good one?
+
+        The digit reader sometimes misses the LEADING digit (76 % read as
+        6 %, 70 % as 0 % - dozens of times a night on camera frames), and
+        every such misread used to look like two power changes to the clock
+        fit (a +1.46 s jump in the night start was seen on live 4/20 #10).
+        Power only ever goes down, and by at most 16 % at once (Foxy's
+        fourth bang); a lost leading digit drops a two-digit value to one
+        digit. Anything else is a misread - unless the same value keeps
+        coming back (POWER_MISREAD_PATIENCE readings in a row): then it is
+        real, e.g. a bang that took 12 % to 1 %."""
+        last = self.last_power
+        if last is None:
+            return True
+        believable = power <= last and last - power <= 20 and not (power < 10 <= last and last - power > 1)
+        if believable:
+            self._odd_power, self._odd_count = None, 0
+            return True
+        if power == self._odd_power:
+            self._odd_count += 1
+        else:
+            self._odd_power, self._odd_count = power, 1
+        if self._odd_count >= POWER_MISREAD_PATIENCE:
+            self._odd_power, self._odd_count = None, 0
+            return True
+        return False
+
     def _note_hud(self, hud, stamp: float) -> None:
         """Book a HUD reading taken at ``stamp``: the clock learns from power
         changes, and the power is traced to the log now and then. Called for
@@ -285,6 +318,8 @@ class RealBody:
         keeps following the game's speed while the monitor is up - the game
         runs at a slightly different pace then (measured with
         tools/measure_ticks.py)."""
+        if hud.power is not None and not self._power_reading_ok(hud.power):
+            hud = replace(hud, power=None)      # a misread: keep the last good value
         if hud.power is not None:
             if self.last_power is not None and hud.power != self.last_power:
                 # The change happened somewhere between the previous look at

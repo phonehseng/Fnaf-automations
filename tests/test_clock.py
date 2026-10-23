@@ -74,3 +74,21 @@ def test_game_second_scale_is_learned_from_power_changes():
     assert abs(body.t0 - 1000.0) < 0.02
     # The brain's clock (game seconds) now agrees with the real tick times.
     assert abs((1000.0 + 500 * true_scale - body.t0) / body.scale - 500) < 0.05
+
+
+def test_power_misreads_are_ignored():
+    """The digit reader sometimes misses the leading digit (76 % -> 6 %).
+    Such a reading must not reach the clock fit; a value that keeps coming
+    back is real all the same (a big bang drop)."""
+    from fnafbot import body as body_module
+
+    body = body_module.RealBody.__new__(body_module.RealBody)
+    body.last_power, body._odd_power, body._odd_count = 76, None, 0
+    assert not body._power_reading_ok(6)        # lost leading digit
+    assert not body._power_reading_ok(77)       # power never goes up
+    assert body._power_reading_ok(75)           # a normal charge
+    body.last_power = 10
+    assert body._power_reading_ok(9)            # 10 -> 9 is real
+    body.last_power = 12
+    results = [body._power_reading_ok(1) for _ in range(body_module.POWER_MISREAD_PATIENCE)]
+    assert results[:-1] == [False] * (body_module.POWER_MISREAD_PATIENCE - 1) and results[-1]

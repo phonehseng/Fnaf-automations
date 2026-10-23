@@ -960,3 +960,33 @@ AI 20 cannot happen (and Chica did the same on #7). The Custom Night
 levels are set by clicking arrows 20 + 20 times with no check; a lost
 click leaves 19. The arrows stop at 0 and 20, so they now get 5 spare
 clicks at each end - a lost click can no longer matter.
+
+### The lag under a real 4/20 load, and the HUD misreads
+
+New tool `tools/measure_lag_420.py`: Custom Night 20/20/20/20 with both
+doors shut all night (nobody can get in; Bonnie and Chica still walk up and
+are sent back), the left light on around every one of their ticks, and the
+camera up between those windows the way the bot's flips are (4B, Pirate
+Cove every third cycle). Lights-out moments, read as Chica's ticks (the
+reading that gives a smooth curve):
+
+| night time | lag |
+|---|---|
+| 45 - 100 s | +0.26 .. +0.43 s |
+| 105 - 185 s | +0.48 .. +0.53 s |
+
+So a 4/20 load settles at ~0.5 s too - inside the 0.45 - 1.0 s range the
+bot now assumes after 90 s. Live #11's door clicks remain unexplained: the
+OBS frames (this recording runs in step with the log) show the cursor on
+the red DOOR button for all three clicks and the door never moving - open,
+idle, camera down. The only remaining reason in event [96] is Bonnie
+already inside, which would need a far larger lag than measured here.
+
+The same night exposed a bigger, older problem: the power readout's digit
+reader regularly loses the LEADING digit - 91 % read as 9 %, 75 % as 4 %,
+70 % as 0 % - dozens of times a night, mostly on camera frames. Each such
+misread looked like two power changes, and power changes are what the bot
+fits its game clock to (the +1.46 s jump of the night start on live #10).
+`RealBody._power_reading_ok` now rejects readings that go up, drop more
+than 20 %, or fall from two digits to one (except 10 -> 9) - unless the
+same value comes back five times in a row (a real bang drop).
