@@ -1923,6 +1923,14 @@ class Brain:
             later_moves = max(0, self._moves_since(watch, watch.seen_at_door_at, self.body.now()) - 1)
             watch.min_moves = max(0, watch.distance[watch.repelled_to] - later_moves)
         self.say(f"{name} went back towards {watch.repelled_to} - door open")
+        # A door that stayed shut for the look (Chica's window): open it now,
+        # while the bot faces it, if that makes nothing late. Left for "later"
+        # it often waited until their next tick, which then counted as a
+        # possible arrival behind the shut door and wanted another look -
+        # 8 - 20 s of right door per Foxy alert on live campaign67.
+        now = self.body.now()
+        if self._needlessly_shut(watch, now) and now + 0.3 <= self._next_commitment(now):
+            self._press_door(watch, reason="open needless")
 
     # ------------------------------------------------------------------
     # Foxy and the camera
@@ -2048,6 +2056,12 @@ class Brain:
         cove_from = self.body.game_to_real(getattr(self.body, "camera_clicked_at", self.body.now()))
         self.camera_selected = "1C"
         view = self.body.read_camera("1C")
+        if not view["visible"] or view["foxy_stage"] is None:
+            # One unreadable picture (a burst of static) is not "no news" yet:
+            # read once more. Taken as "he may be out" straight away, two
+            # such pictures held the left door shut 15 s on live campaign67
+            # while Foxy sat at stage 0.
+            view = self.body.read_camera("1C")
         if view["visible"] and view["foxy_stage"] == 3:
             # "Foxy has gone" triggers the emergency procedure, so make sure:
             # look again (the TV static is different in every frame).
