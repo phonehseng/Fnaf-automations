@@ -242,6 +242,9 @@ FOXY_END_MARGIN = 2.0
 # been logged as covering his ticks, and with Freddy on 4B no cove check
 # had happened for minutes.
 COVE_LOOK_EVERY = 30.0
+# ... and on any flip while the right door is shut anyway, if Foxy may
+# have moved since he was last seen (see Brain._cove_check_due).
+COVE_LOOK_WHEN_MOVED = True
 COVE_LOOK_SECONDS = 2.2       # raise, switch to the cove, read, back to 4B, lower
 
 # Log the power ledger (door and camera time, see Brain._power_ledger) this often.
@@ -2218,7 +2221,8 @@ class Brain:
         # shows, so the flip can look at the cove anyway - at least every
         # COVE_LOOK_EVERY (on live 4/20 #17 the separate look never found a
         # free moment: 250 s without seeing the cove).
-        right_shut = self._right_door_safe() and self.body.now() - self.foxy_verified_at > COVE_LOOK_EVERY
+        right_shut = self._right_door_safe() and (self.body.now() - self.foxy_verified_at > COVE_LOOK_EVERY
+                                                  or (COVE_LOOK_WHEN_MOVED and self.foxy_max_stage > self.foxy_stage))
         return wanted and (not four_b_blocked or self.foxy_max_stage >= 3 or right_shut)
 
     def _right_door_safe(self) -> bool:

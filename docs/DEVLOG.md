@@ -1465,3 +1465,113 @@ time live than in the simulator - reverted.
 OBS stopped recording at 02:06:48 (the process vanished, no orderly stop in
 its log), so this whole series is missing from the footage - including the
 one early loss. The series runner now (re)starts OBS before every night.
+
+### The lag that was not there any more (and three ways to walk in)
+
+Going for "every night won" meant asking where the clean live nights still
+lost power. Foxy: 20 - 30 % of his ticks counted as uncovered, 6 - 17
+alerts a night, and the doors shut for him (left "Foxy might be out", right
+"safe to look at Pirate Cove") cost 3 - 14 % of the battery - 136 door
+seconds on campaign55, the night that ran out. Most of those alerts were
+false: on campaign56 the bot raised 16 and Foxy never got past stage 2.
+
+Why were the ticks "uncovered"? The brain's allowance for the timers' lag.
+Every live sample since the clock fix (campaign47 - 62, 19 samples) says
+0.00 - 0.09 s, but a night without a sample after 90 s assumed up to
+0.8 s and growing - and campaign55 and 57 took no sample all night (lost,
+and won with 0 %). With that allowance every margin was a second wide: ticks
+booked late, checks pushed against flips, and a flip that covered the real
+tick was still "not certain" to have.
+
+| | before | after |
+|---|---|---|
+| lag allowance, no sample yet | 0.15 s + 0.012 s/s (up to 0.95) | 0.15 s + 0.0005 s/s |
+| after 90 s with no settled sample | 0.8 s + 0.0015 s/s | 0.25 s + 0.0003 s/s |
+| simulator's lag | jump 0.3 - 0.8 s, drift up to 0.0015 s/s | jump 0 - 0.15 s, drift up to 0.0002 s/s |
+
+The old allowances were for the old clock error, and if anything like it
+comes back the narrow ones are dangerous (the old lag in the simulator: 160
+of 400 won). So the night switches back to the wide ones on evidence: a
+sample above 0.3 s, a lamp going dark off every tick model, or one watch
+that sees nobody leave (at AI 20 someone seen at a door shut before their
+tick always leaves on it - live that happened on 2 of 35 watches). A sample
+is also taken again when the last is 90 s old. With the old lag: 372/400.
+
+Chasing the last simulated losses turned up three real holes:
+
+* **Moves counted from the wrong moment.** After "certainly sent back",
+  their distance is counted from the last sighting - but the sighting time
+  was taken after the door click (~0.5 s late), and a tick the model put
+  just before it could really have come after it. Bonnie (seed 103) and
+  Chica (seed 411) were one room nearer than counted and walked in. Now
+  the look itself is the sighting, and ticks within the lag allowance (plus
+  the usual 0.4 s settle) before it count too.
+* **A tick behind a shut door.** The routine light check only looks
+  through open doors. When a door was shut for something else (the cove
+  look) and one of their ticks passed, nobody was "possibly there", and the
+  door was opened as "needlessly shut" - with Chica standing behind it
+  (seed 536). Such a tick now marks them as possibly there: the door waits
+  for a look.
+* **Two checks due together and a flip.** Each check was judged alone
+  ("does this one still fit after the flip?"), so the flip went first and
+  the second check came 0.2 s late (seed 28). Now the flip only goes first
+  if all the waiting checks fit after it.
+
+And the Foxy alert no longer shuts the left door first when there is time:
+it looks with the door open if his fuse is at least 9 s away and Bonnie
+cannot step in before the look is over (both checked again after shutting
+the right door), and alerts start 11 s before the fuse (was 7). A first
+try without the Bonnie test let him in on 25 of 400 nights; one with too
+little time let Foxy bang on his own - a 1 % bang the bot cannot see, so
+his timer restarted unnoticed and he climbed unseen until he got in.
+
+Simulated 4/20, seeds 1 - 1000: **1000/1000**, 15.3 % power on average,
+4.0 % at least (before: 994/1000, 0.1 % at least). Nights 1 - 6 unchanged or
+better. New log lines say which job made a Foxy flip start late, for the
+live nights.
+
+### Live series campaign63 - 67 (OBS, from 17:09): 3 of 5
+
+| night | result | uncovered Foxy ticks | notes |
+|---|---|---|---|
+| campaign63 | won, 8 % | 12 | 2 alerts |
+| campaign64 | won, 6 % | 21 | |
+| campaign65 | won, 2 % | 15 | |
+| campaign66 | lost, out of power ~510 s | 13 | Foxy ran twice (370 s, 504 s - the 6 % bang ended it) |
+| campaign67 | lost, out of power ~495 s | 16 | right door 85 s "safe to look at Pirate Cove", two unreadable cove pictures |
+
+Uncovered ticks fell from ~23 to ~15 a night, but the margins did not grow
+enough. The new "late flip" lines name the job that made a flip late: a
+Chica light check 40 times (0.5 s late on average), Bonnie's check or door
+16 + 18 times - the three timers bunching up, where the checks now come
+first on purpose.
+
+Two leaks, fixed: after a Foxy alert the right door was shut for the cove
+look, Chica's window then showed nobody - and the door stayed shut "until
+later", her next tick counted as a possible arrival behind it, and it took
+another look: 8 - 20 s of right door per alert. The door now opens right
+after the empty look. And an unreadable cove picture is read once more
+before it counts as "Foxy may be out" (two of them held the left door 15 s
+on campaign67 with Foxy at stage 0).
+
+### Live series campaign68 - 72 (OBS, from 18:11): 3 of 5
+
+| night | result | uncovered | alerts | notes |
+|---|---|---|---|---|
+| campaign68 | won, 4 % | 16 | 6 | |
+| campaign69 | won, 7 % | 15 | 7 | |
+| campaign70 | lost, out of power | 15 | 9 | Foxy ran twice |
+| campaign71 | won, 3 % | 12 | 14 | |
+| campaign72 | lost, out of power | 14 | 17 | Foxy ran once, left door 120 s |
+
+Ten live nights on the new brain: 6 won, every loss out of power after
+Foxy-heavy nights; no jumpscare by Bonnie, Chica or Freddy. Not better than
+the 7 of 10 before, although the simulator now wins 1000 of 1000: it still
+sees ~10 uncovered ticks and ~4 alerts a night where the live game has
+12 - 21 and 6 - 17. Closing that gap - what the live game does to the
+flips that the simulator does not - is the next job; tuning against the
+simulator alone no longer moves the live result.
+
+Also in: on any flip while the right door is shut anyway, look at the cove
+if Foxy may have moved (it was at most every 30 s) - 600 simulated nights:
+no loss either way, +0.1 % power.
