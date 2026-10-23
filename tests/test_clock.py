@@ -1,6 +1,8 @@
 """The night clock: the overlay's hands, the 6 AM screen detector and the
 game-second scale that RealBody learns from power changes."""
 
+import math
+
 import numpy as np
 
 from fnafbot import overlay, rules, vision
@@ -60,6 +62,7 @@ def test_game_second_scale_is_learned_from_power_changes():
     body.scale = 1.0                    # start with a wrong belief: 1 game s = 1 real s
     body._power_sightings = []
     body._fitted = False
+    body.clock_deaf_from, body.clock_deaf_until = math.inf, -math.inf
     true_scale = 1.0065
     rng = np.random.default_rng(0)
     for k in range(1, 200):
@@ -90,6 +93,7 @@ def _sparse_power_night(true_scale: float, guess: float, seed: int, late_start: 
     body.scale = guess
     body._power_sightings = []
     body._fitted = False
+    body.clock_deaf_from, body.clock_deaf_until = math.inf, -math.inf
     rng = np.random.default_rng(seed)
     errors = []                      # (charge, how far the clock's whole second is from it)
     units = 999
@@ -126,6 +130,26 @@ def test_late_noticed_night_start_is_corrected():
             body, errors = _sparse_power_night(1.0, 1.0, seed, late_start=late)
             assert max(abs(e) for k, e in errors if k >= 30) < 0.08, (late, seed)
             assert abs(body.real_origin - 1000.0) < 0.06, (late, seed, body.real_origin - 1000.0)
+
+
+def test_early_bang_does_not_move_the_night_start():
+    """Live 4/20 #29: a Foxy bang (1 %, off the charges) among the first few
+    power changes moved the night start 0.58 s. The early median must not."""
+    from fnafbot import body as body_module
+
+    body = body_module.RealBody.__new__(body_module.RealBody)
+    body.t0 = body.real_origin = 1000.35      # noticed 0.35 s late
+    body.scale = 1.0
+    body._power_sightings = []
+    body._fitted = False
+    body.clock_deaf_from, body.clock_deaf_until = math.inf, -math.inf
+    for k in (8, 15, 23, 30):
+        body._calibrate(1000.0 + k + 0.04, gap=0.05)
+    body._calibrate(1000.0 + 34.45, gap=0.05)          # the bang
+    for k in (38, 45):
+        body._calibrate(1000.0 + k + 0.04, gap=0.05)
+    assert abs(body.real_origin - 1000.0) < 0.05
+    assert abs(body.t0 - 1000.0) < 0.05
 
 
 def test_power_misreads_are_ignored():

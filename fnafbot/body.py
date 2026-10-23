@@ -164,6 +164,9 @@ class RealBody:
         # frames grabbed close together (see _note_hud).
         self._clock_power: int | None = None
         self._clock_look_at = 0.0
+        # Night times between which power changes are not used for the clock
+        # (the brain sets this around a Foxy bang it expects).
+        self.clock_deaf_from, self.clock_deaf_until = math.inf, -math.inf
         # The animatronics' movement timers run in REAL seconds from the
         # night's first frame. That origin is fixed once the early power
         # sightings have refined it; the power clock's own fit (t0, scale)
@@ -240,6 +243,8 @@ class RealBody:
         if gap > SIGHTING_MAX_GAP:
             return   # noticed late: cannot tell when it happened
         changed_at = seen_at - gap / 2          # best guess: the middle of the gap
+        if self.clock_deaf_from <= (changed_at - self.t0) / self.scale <= self.clock_deaf_until:
+            return   # around a bang the brain set off (it costs power off the charges)
         elapsed = (changed_at - self.t0) / self.scale
         if elapsed < ORIGIN_SETTLES_AFTER:
             # Early: the change can be up to EARLY_LATE_START before where
@@ -269,12 +274,25 @@ class RealBody:
         ticks = np.array([k for k, _ in sightings], dtype=float)
         seen = np.array([t for _, t in sightings])
         early = latest <= ORIGIN_SETTLES_AFTER
-        if len(sightings) < SCALE_MIN_SIGHTINGS or ticks[-1] - ticks[0] < SCALE_MIN_SPAN_TICKS:
-            # Too few for a slope: move the night start only (early in the
-            # night from all the sightings, robustly; later from the latest).
+        enough = len(sightings) >= SCALE_MIN_SIGHTINGS and ticks[-1] - ticks[0] >= SCALE_MIN_SPAN_TICKS
+        if not enough:
+            # Too few for a slope: move the night start only - early in the
+            # night from the median of ALL sightings, later from the latest few.
             new_scale = self.scale
             pick = slice(None) if early else slice(-3, None)
             new_t0 = float(np.median(seen[pick] - ticks[pick] * self.scale))
+        elif early:
+            # Early in the night, a line that one bad sighting cannot drag:
+            # the median of the slopes between every pair of sightings, then
+            # the median start (Theil-Sen). A least-squares line through five
+            # sightings could be dragged: on live 4/20 #29 Foxy's first bang
+            # (1 %, like a charge, but off the whole seconds) moved the start
+            # 0.58 s, and the Bonnie/Chica model with it.
+            i, j = np.triu_indices(len(ticks), 1)
+            spread = ticks[j] - ticks[i] >= 5
+            new_scale = float(np.median((seen[j] - seen[i])[spread] / (ticks[j] - ticks[i])[spread]))
+            new_scale = min(max(new_scale, SCALE_RANGE[0]), SCALE_RANGE[1])
+            new_t0 = float(np.median(seen - ticks * new_scale))
         else:
             slope, intercept = np.polyfit(ticks, seen, 1)
             on_line = np.abs(seen - (slope * ticks + intercept)) < 0.08
@@ -282,8 +300,8 @@ class RealBody:
                 slope, intercept = np.polyfit(ticks[on_line], seen[on_line], 1)
             new_scale = min(max(float(slope), SCALE_RANGE[0]), SCALE_RANGE[1])
             new_t0 = float(intercept)
-            if not self._fitted:
-                log.info("Clock fitted from %d power changes: game second = %.4f real s", len(sightings), new_scale)
+        if enough and not self._fitted:
+            log.info("Clock fitted from %d power changes: game second = %.4f real s", len(sightings), new_scale)
             self._fitted = True
         # Move the clock at most CLOCK_MAX_STEP at the latest charge (the
         # slope is taken as fitted; only the jump "now" is limited).

@@ -2091,6 +2091,9 @@ class Brain:
         # camera, this was 0.3 - 0.5 s late; a measured bang corrects it,
         # but his first bang of the night, 1 %, cannot be told from a charge.)
         bang_at = run_from + rules.FOXY_RUN_FRAMES * rules.FRAME
+        # His bang costs power off the whole-second charges: keep it out of
+        # the clock's power sightings.
+        self.body.clock_deaf_from, self.body.clock_deaf_until = bang_at - 1.0, bang_at + 1.5
         self.body.wait_until(max(self.body.now(), bang_at + 0.6))
         self._foxy_timer_restarted(bang_at)
         self.foxy_emergency = False
