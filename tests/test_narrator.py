@@ -38,3 +38,11 @@ def test_night_over_words():
     assert narrator.night_over_message(True, 11).startswith("6 AM!")
     assert "jumpscared" in narrator.night_over_message(False, 40)
     assert "Out of power" in narrator.night_over_message(False, 0)
+
+
+def test_compact_notes_fit_one_line():
+    notes = {"Bonnie": ">= 2 moves", "Chica": "AT DOOR", "Foxy": "stage 1 (<= 2)", "Freddy": "at 4B",
+             "Doors": "L open / R SHUT 3s (chica at the door: just)"}
+    text = narrator.compact_notes(notes)
+    assert text == "Bonnie 2 away | Chica AT DOOR | Foxy 1-2 | Freddy 4B | L open R shut"
+    assert len(text) <= 75

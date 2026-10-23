@@ -128,6 +128,33 @@ def narrate(action: str, notes: dict[str, str] | None = None) -> str:
     return a
 
 
+def compact_notes(notes: dict[str, str]) -> str:
+    """The brain's beliefs about everyone, short enough for one panel line
+    (about 75 characters fit): 'Bonnie 2 away | Chica AT DOOR | Foxy 1-2 |
+    Freddy 4B | L open R shut'."""
+    parts = []
+    for who in ("Bonnie", "Chica"):
+        note = notes.get(who, "?")
+        m = re.match(r">= (\d+) moves", note)
+        parts.append(f"{who} {m.group(1)} away" if m else f"{who} {note}")
+    foxy = notes.get("Foxy")
+    if foxy:
+        m = re.match(r"stage (\d)(?: \(<= (\d)\))?", foxy)
+        if m:
+            parts.append(f"Foxy {m.group(1)}" + (f"-{m.group(2)}" if m.group(2) else ""))
+        else:
+            parts.append("Foxy OUT" if foxy == "LEFT COVE" else f"Foxy {foxy}")
+    freddy = notes.get("Freddy")
+    if freddy:
+        parts.append({"at 4B": "Freddy 4B", "not at 4B": "Freddy away"}.get(freddy, f"Freddy {freddy}"))
+    doors = notes.get("Doors")
+    if doors:
+        states = [("shut" if " SHUT" in d else "open") for d in doors.split(" / ")]
+        if len(states) == 2:
+            parts.append(f"L {states[0]} R {states[1]}")
+    return " | ".join(parts)
+
+
 def power_comment(power: int | None, night_time: float, night: int) -> tuple[str, bool]:
     """A few words on the power, and whether they are a warning.
 

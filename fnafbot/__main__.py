@@ -153,7 +153,7 @@ class Session:
                 # One short line each, so all three fit the panel's height.
                 status=f"Power {body.power()}% - {comment} | usage {controller.hud.usage or '?'}",
                 warn=low,
-                threats="  ".join(f"{name} {note}" for name, note in status.notes.items()),
+                threats=narrator.compact_notes(status.notes),
                 night_time=t,
                 rate=1.0 / body.scale,   # keeps the clock hands moving between updates
             )

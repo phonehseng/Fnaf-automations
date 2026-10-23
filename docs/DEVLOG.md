@@ -1390,3 +1390,32 @@ out of them anyway: the bot now refuses to start while another copy runs
 (a system-wide name, `_only_copy_running`), and the first minute's clock
 fit became a Theil-Sen line (median slopes and start), which one bad power
 sighting cannot drag - campaign48 had moved the night start 0.58 s.
+
+### A clean five-night 4/20 series: 4 of 5 won
+
+| night      | result | power at 6 AM | notes |
+|------------|--------|---------------|-------|
+| campaign53 | won    | 6 %  | |
+| campaign54 | won    | 2 %  | |
+| campaign55 | lost   | out of power at 471 s | two Foxy runs (bangs 6 %+) and six Foxy alerts |
+| campaign56 | won    | 1 %  | |
+| campaign57 | won    | 0 %  | |
+
+With #28 (11 %), five of the last six clean live nights were won - but on
+four of them with 0 - 6 % to spare, so a Foxy-heavy night still tips it
+over. Foxy is where the next power has to come from.
+
+### The status panel speaks plainly
+
+Viewers saw "Camera flip to hold Foxy" while the camera was really staring
+Freddy down on 4B, and the panel's lines were cut off at its right edge.
+`fnafbot/narrator.py` now turns the brain's log messages into what is
+really going on ("Eyes on Freddy - he's right there on 4B! (keeps Foxy
+frozen too)", "Oh no! Bonnie's here! Left door SHUT", "BANG! Foxy hit the
+door"), comments on the power against a winning 4/20 pace ("running lower
+than expected!", amber), and ends the night with "6 AM! We made it" or
+"Oh no! Getting jumpscared!". The log keeps the exact words for the tools.
+The panel is wider (x 260 - 1095, still clear of everything the vision
+reads) and each line fits:
+
+![status panel](status_panel.png)
