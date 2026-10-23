@@ -1419,3 +1419,30 @@ The panel is wider (x 260 - 1095, still clear of everything the vision
 reads) and each line fits:
 
 ![status panel](status_panel.png)
+
+### Cutting Foxy's cost: why his ticks went uncovered
+
+On the clean live nights 15 - 22 of Foxy's ~107 ticks a night went
+uncovered and the bot ran 8 - 17 Foxy alerts (each a left-door shut and a
+cove look). Every uncovered tick was classified against the camera views
+around it - live and in the simulator the mix was the same: flips that
+started after the tick or too close before it, cove checks that lowered
+the camera before his (moved) tick, and ticks with no flip at all.
+Three fixes, measured on 60 simulated 4/20 nights each:
+
+| change | uncovered ticks / night | alerts / night | power at 6 AM |
+|---|---|---|---|
+| before | 11.7 | 6.3 | 13.7 % |
+| light checks and the flip planned as one order (`_best_first`) | 11.5 | 6.0 | 14.0 % |
+| a door click that must come before a flip starts 0.4 s earlier (`FLIP_DOOR_SLACK`, was 0.15) | 9.9 | 4.2 | 14.7 % |
+| after a cove check, hold the camera for his tick if the look moved it within a second | 8.3 | 3.5 | 15.0 % |
+
+`_best_first`: Bonnie's, Chica's and Foxy's timers have almost the same
+period, so their deadlines bunch up for minutes on end; taking light checks
+strictly by deadline often did both before the flip and the second one
+made it late. Now every order of the waiting checks and the flip is tried
+(with the pans between the sides), and of those that meet every check's
+deadline, the one that makes the flip least late goes first.
+
+Other nights unchanged (60 each): 6th Night 57/60, Night 5 59/60, Night 4
+59/60.

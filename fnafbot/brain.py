@@ -27,6 +27,7 @@ Strategy in short (details in docs/STRATEGY.md):
 
 from __future__ import annotations
 
+import itertools
 import logging
 import math
 from dataclasses import dataclass, field
@@ -104,6 +105,12 @@ FOXY_VERIFY_EVERY = 15.0
 # less than 25 s. The full alert (shut the left door, look) starts this long
 # before the earliest possible end of that fuse.
 FOXY_FUSE_SECONDS = 24.5
+# A planned door click that has to come before a Foxy flip starts this much
+# earlier than the bare pan + click cooldown: the click job also waits for
+# the cooldown and confirms the door lamp. With 0.15 s the flip after it
+# was regularly 0.1 - 0.2 s late in the simulator - late enough to leave
+# Foxy's tick uncovered.
+FLIP_DOOR_SLACK = 0.4
 FOXY_ALERT_LEAD = 7.0
 # Foxy's real tick may come up to this long after the one the brain
 # computes from rules.TICK_PHASE (measured to within ~0.1 s from his bangs;
@@ -1036,8 +1043,13 @@ class Brain:
                 # cover his tick.
                 estimate = self._pan_time(watch.side) + LIGHT_CHECK_SECONDS + BUTTON_COOLDOWN + 0.4
                 checks.append((deadline, estimate, watch))
+        first = self._best_first(now, checks, freeze_start, freeze_end) if checks and not hard else None
         for deadline, estimate, watch in sorted(checks, key=lambda c: c[0]):
             job = lambda w=watch: self._check_doorway(w)
+            if first == "flip":
+                break                 # the flip goes first; the checks fit after it
+            if first is not None and first is not watch:
+                continue              # the other check goes first
             if hard:
                 planned = hard[0][1]
                 # Does the check fit BEFORE the planned click (including the
@@ -1084,7 +1096,7 @@ class Brain:
             # early enough for the pan and the click cooldown to fit BEFORE
             # the flip - started at the flip time, it made flips 0.8 s late
             # on the live game, and late flips do not cover Foxy's tick.
-            lead = self._pan_time(hard[0][1].side) + BUTTON_COOLDOWN + 0.15
+            lead = self._pan_time(hard[0][1].side) + BUTTON_COOLDOWN + FLIP_DOOR_SLACK
             if now >= freeze_start - lead:
                 return shut_planned_door_now("before camera flip")
         if freeze_start is not None and now >= freeze_start - 0.005:
@@ -1097,6 +1109,50 @@ class Brain:
             if nothing_late(self._pan_time(side) + WARMUP_CYCLE_SECONDS):
                 return lambda sd=side: self._warmup_cycle(sd)
         return None
+
+    def _best_first(self, now: float, checks: list, freeze_start: float | None,
+                    freeze_end: float | None):
+        """Which of the waiting light checks and the next Foxy flip to do
+        first: the watch of a check, "flip", or None (no order works - fall
+        back to the safety-first rule: checks by deadline).
+
+        Bonnie's, Chica's and Foxy's timers have almost the same period
+        (4.97, 4.98, 5.01 s), so their deadlines bunch up in the same
+        couple of seconds for minutes on end. Taking the checks simply by
+        deadline often did both before the flip, and the second one made
+        the flip late - a late flip leaves Foxy's tick uncovered, and on the
+        live 4/20 nights 15 - 22 ticks a night went uncovered (8 - 17 Foxy
+        alerts, each a left-door shut and a cove look). Here every order of
+        (at most two) checks and the flip is tried, with the pans between the
+        two sides: of the orders in which every check meets its deadline,
+        the one that makes the flip least late wins."""
+        if freeze_start is None:
+            return None
+        flip_length = freeze_end - max(freeze_start, now)
+        items = [("check", deadline, estimate, watch) for deadline, estimate, watch in checks] + [("flip",)]
+        facing = getattr(self.body, "facing", None)
+        best = None
+        for order in itertools.permutations(items):
+            t, side, late, ok = now, facing, 0.0, True
+            for item in order:
+                if item[0] == "flip":
+                    start = max(t, freeze_start)
+                    late = start - freeze_start
+                    t = start + flip_length
+                else:
+                    _, deadline, estimate, watch = item
+                    pan_now = 0.0 if side == watch.side else PAN_SECONDS
+                    # (the estimate already includes a pan from where the bot faces now)
+                    t += estimate - self._pan_time(watch.side) + pan_now
+                    side = watch.side
+                    if t > deadline:
+                        ok = False
+                        break
+            if ok and (best is None or (late, t) < best[0]):
+                best = ((late, t), order[0])
+        if best is None:
+            return None
+        return "flip" if best[1][0] == "flip" else best[1][3]
 
     def _peek_estimate(self, watch: DoorWatch) -> float:
         """How long a peek keeps the bot busy, generously: pan over, wait for
@@ -1131,7 +1187,7 @@ class Brain:
             if planned:
                 # A planned click may have to be done before the flip (see
                 # _choose_job, step 4): wake in time for that decision.
-                early = freeze_start - (PAN_SECONDS + BUTTON_COOLDOWN + 0.15)
+                early = freeze_start - (PAN_SECONDS + BUTTON_COOLDOWN + FLIP_DOOR_SLACK)
                 if early > now:
                     wake = min(wake, early)
         watches = [(plan[0], w) for w in (self.left, self.right)
@@ -1911,9 +1967,12 @@ class Brain:
                 self.say("Pirate Cove unreadable - Foxy may be out", alert=True)
         # Whatever was done up there, the picture must stay up long enough
         # to freeze Foxy for this tick (a cove check that finished early
-        # once left half of all ticks uncovered in the simulator).
+        # once left half of all ticks uncovered in the simulator). A look at
+        # the cove also paused his timer and moved this very tick later
+        # (_foxy_timer_paused): if it now comes within a second, hold for
+        # it too - lowering first left ~1 tick in 6 of the misses uncovered.
         self.body.wait_until(self._hold_until(tick))
-        self._lower_camera()
+        self._lower_camera_covering_foxy()
         if stage is not None:
             self._after_cove_check(stage)
 
