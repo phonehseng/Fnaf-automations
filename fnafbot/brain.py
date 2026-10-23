@@ -136,14 +136,16 @@ LAG_PRIOR = 0.15
 LAG_PRIOR_GROWTH = 0.012
 LAG_PRIOR_QUIET = 20.0
 LAG_SPREAD_MAX = 0.95
-# After the first minute and a half with no sample yet, assume the lag has
-# settled where the cold starts all settled (0.55 - 0.62, 0.78 - 0.85, and
-# ~0.6 on live 4/20 #8): between these two values. Allowing anything from
-# 0 to 0.95 s made the "has their tick happened yet" wait 1.4 s long, and a
-# peek through Bonnie's door almost never fitted (live #10). The floor errs
-# low (door clicks come early, the safe side); a sample replaces both.
+# After the first minute and a half with no sample taken since, assume the
+# lag is at most LAG_SETTLED_HI, growing by LAG_SETTLED_GROWTH a second
+# (cold starts settled at 0.55 - 0.62 and 0.78 - 0.85 s, a 4/20 load at
+# ~0.5 s, and live 4/20 #12 crept up to ~1 s by 400 s). Allowing anything up
+# to 0.95 s from 20 s on made the "has their tick happened yet" wait 1.4 s
+# long, and a peek through Bonnie's door almost never fitted (live #10).
+# (An assumed FLOOR of 0.45 s here lost live 4/20 #13 and #14: on nights
+# whose lag stayed small, every tick sat ~0.4 s late on the model and a
+# door click landed on the real tick. Only a measurement raises the floor.)
 LAG_SETTLED_AFTER = 90.0
-LAG_SETTLED_LO = 0.45
 LAG_SETTLED_HI = 0.8
 # ... and on a live 4/20 night it keeps creeping up after that (0.97 s by
 # 416 s on #12), so the upper end grows this much per second.
@@ -507,7 +509,7 @@ class Brain:
         self.lag_samples.append((seen_at, lag, high))
         if len(self.lag_samples) == 1 or (seen_at >= LAG_SETTLED_AFTER and len(self._settled_samples()) == 1):
             # The first sample - and the first one after the lag has settled
-            # - replaces the assumed floor (LAG_SETTLED_LO), even downwards. (Moving the bookkeeping marks back can only
+            # - sets the floor, even downwards (the first one after 90 s, too). (Moving the bookkeeping marks back can only
             # count a tick twice - one extra check, never a missed one.)
             self._raise_lag_floor(lag - LAG_NOISE, allow_lower=True)
         else:
@@ -565,8 +567,6 @@ class Brain:
     # ------------------------------------------------------------------
 
     def _account_for_ticks(self, now: float) -> None:
-        if now >= LAG_SETTLED_AFTER and not self.lag_samples:
-            self._raise_lag_floor(LAG_SETTLED_LO)      # see LAG_SETTLED_AFTER
         # A tick only counts as passed once the clock is certainly past it;
         # otherwise a doorway check could run just BEFORE the real tick and
         # report "empty" about a doorway they are about to step into.

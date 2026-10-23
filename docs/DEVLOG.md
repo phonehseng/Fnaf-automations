@@ -1027,3 +1027,12 @@ ever widens the TOP of the range. With no sample since 90 s the top is
 0.8 s + 0.0015 s/s, or the latest sample plus its growth allowance,
 whichever is higher. The 0.45 s floor stays only for a night with no
 sample at all.
+
+### Live 4/20 #14 (20:40): Chica at ~95 s - the same floor, once more
+
+No lag sample before 90 s, so the "no sample at all" case still raised the
+floor to the assumed 0.45 s at 90 s; Chica's click at 93.91 s (0.5 s
+before her move "at 94.41 s") was refused three times - she was in. The
+assumed floor is now gone completely: only a measured lag raises it.
+Simulator (40 nights each): 4/20 26/40, 6th Night 36/40, Night 5 34/40 -
+nobody got in on any of them; every loss a power-out.
