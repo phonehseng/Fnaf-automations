@@ -235,13 +235,19 @@ JIT_MIN_SLACK = 0.6
 # takes a moment longer to come down. A click 0.4 s late once let Bonnie
 # in (docs/DEVLOG.md); the click itself still waits for the planned moment.
 JIT_HEADROOM = 0.1
-# The "certainly sent back at AI 20" shortcut (see _certainly_repelled) is
-# off: on the live game it was wrong twice - Chica stayed at the door through
-# a tick with the door fully shut (seen in the OBS footage) and walked in
-# once it was opened. Departures are always confirmed by a look instead
-# (Chica: through her window with the door shut; Bonnie: a blind reopen with
-# the closing click still planned until a look says he has gone).
-TRUST_AI20_PROOF = False
+# The "certainly sent back at AI 20" shortcut (see _certainly_repelled): ON
+# again. It was switched off after Chica "stayed at the door through a tick
+# with the door fully shut" and walked in once it was opened (live 4/20 #7).
+# Both explanations found since are now dealt with: a lost arrow click could
+# leave her at AI 19 (the setup now gives spare clicks), and - the likelier
+# one - the timers run late: her real tick came after the bot had already
+# started opening the door, and a move during a door animation waits for it
+# to finish. Ticks now count as passed only once the measured lag range is
+# behind them. And a departure taken on trust is still verified with a
+# light check before their next tick (verify_departure). Without it the
+# left door stayed shut 14 - 82 s per Bonnie visit waiting for a peek that
+# did not fit (live 4/20 #17, #18): the biggest single power cost.
+TRUST_AI20_PROOF = True
 
 # Can the doorway be checked with the door SHUT? Verified live on
 # 2026-10-22 (tools/check_shut_window.py): Chica's window is beside the right
@@ -1286,7 +1292,7 @@ class Brain:
         """Shut a door instead of doing its due light check. They may be
         there (or arrive at the tick), so they are treated as possibly at the
         door until a look - for Chica a cheap window look - says otherwise."""
-        self._press_door(watch)
+        self._press_door(watch, reason=reason)
         watch.at_door = True
         watch.seen_for_sure = False
         watch.seen_at_door_at = self.body.now()
@@ -1583,7 +1589,7 @@ class Brain:
         self.body.face(watch.side)
         self.body.wait_until(max(self.body.now(), watch.moving_until))
         if self._needlessly_shut(watch, self.body.now()):
-            self._press_door(watch)
+            self._press_door(watch, reason="open needless")
             self.say(f"{watch.who.capitalize()} has gone - {watch.side} door open")
 
     def _reopen_blind(self, watch: DoorWatch) -> None:
@@ -1616,7 +1622,7 @@ class Brain:
                 or close_at - open_done < BLIND_MIN_OPEN):
             watch.reopen_after = self._tick_after(watch, now) + TICK_SETTLE + self._lag_spread(now)
             return
-        self._press_door(watch)
+        self._press_door(watch, reason="reopen blind")
         watch.close_at = close_at
         watch.looked_while_open = False
         watch.checked_since_tick = True     # nothing to learn until their next tick
@@ -1641,7 +1647,7 @@ class Brain:
             start = self.body.now()
         else:
             self.say(f"Checking whether {name} left (peek)")
-            self._press_door(watch)
+            self._press_door(watch, reason="peek")
             start = watch.moving_until
         self.body.wait_until(self.quiet_light_start(start, max(start, self._latest_light_start(watch, start))))
         present, lit = self._flash_light(watch)
@@ -1969,7 +1975,7 @@ class Brain:
         """Shut a door for a Foxy/Freddy reason (if it is not shut already)."""
         if watch.door_closed:
             return
-        self._press_door(watch)
+        self._press_door(watch, reason=reason)
         self.say(f"{watch.side} door closed ({reason})")
 
     def _release(self, watch: DoorWatch) -> None:
@@ -1987,7 +1993,7 @@ class Brain:
         # tick, and she walked in at the next one (docs/DEVLOG.md).
         self._account_for_ticks(self.body.now())
         if not watch.at_door and watch.min_moves >= 1:
-            self._press_door(watch)
+            self._press_door(watch, reason="release")
             return
         if not watch.at_door:
             watch.at_door = True

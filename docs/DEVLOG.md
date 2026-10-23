@@ -1112,3 +1112,24 @@ Changes:
 Simulator, 60 nights each, nobody got in on any: 4/20 56/60 (8.2 % left),
 6th Night 55/60 (9.5 %), Night 5 52/60 (9.4 %); Nights 1-3 30/30, Night 4
 26/30 (power).
+
+### Live 4/20 #18 (21:27): out of power at ~445 s - and the AI-20 shortcut back on
+
+The new power ledger made the cost plain. tools/door_report.py: the LEFT
+door shut 177 s of 448 (39 %), mostly in 10 - 16 s spans that ended with a
+late peek finding "Bonnie went back towards 1B": he had been sent back at
+his first tick behind the shut door, and the bot did not know until a
+peek fitted.
+
+At AI 20 he always moves at his tick, and a fully shut door always sends
+him back (event [215]). The shortcut that used this (TRUST_AI20_PROOF) was
+switched off after live #7, where Chica "stayed at the shut door through
+a tick" and walked in once it was opened. Both explanations found since
+are dealt with: a lost arrow click could leave her at AI 19 (the Custom
+Night setup now has spare clicks), and the timers' lag - her real tick
+came after the bot had started opening the door, and a move during a door
+animation waits for it to finish and then goes through. Ticks now only
+count as passed once the measured lag range is behind them, and a
+departure taken on trust is still checked with the light before their
+next tick. Simulator, 60 nights: 4/20 60/60 with 11.9 % left (was 56/60,
+8.2 %); the 6th Night and Night 5 unchanged (their AI is below 20).
