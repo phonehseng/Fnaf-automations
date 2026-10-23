@@ -144,12 +144,12 @@ def power_comment(power: int | None, night_time: float, night: int) -> tuple[str
     if remaining <= 0:
         return "", False
     if power < must_keep + 2:
-        return "Power critical - every second counts!", True
+        return "critical, every second counts!", True
     if power < on_pace - BEHIND_PACE:
-        return "Power running lower than expected!", True
+        return "running lower than expected!", True
     if power > on_pace + 3 * BEHIND_PACE:
-        return "Power looking healthy", False
-    return "Power on track", False
+        return "looking healthy", False
+    return "on track", False
 
 
 def night_over_message(survived: bool, power: int) -> str:
