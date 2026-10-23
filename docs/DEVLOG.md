@@ -1177,3 +1177,22 @@ Fix: a flip that is late still covers the current tick if his LATEST
 possible moment (the lag range after the earliest) is still ahead of the
 picture (`Brain._foxy_flip_search_from`). Simulator, 60 nights: 4/20 59/60
 (12.6 %), 6th Night 57/60, Night 5 52/60; nobody got in.
+
+### Live 4/20 #21 (22:09): out of power at ~470 s - flips still starved
+
+The best start yet (74 % at 152 s, 63 % at 212 s, 52 % at 273 s, 40 % at
+335 s, no Foxy alert until 376 s), then two Foxy runs 60 s apart and the
+battery was gone. Between the runs there was again a stretch with no
+flips at all (419 - 437 s): every cycle a blind reopen of Bonnie's door,
+a Chica check, then Bonnie's door shut "before camera flip" a few tenths
+after Foxy's earliest tick - and the late-flip allowance (0.4 s) was not
+enough, so each flip was dropped. A late flip now goes ahead up to 1.2 s
+after his earliest tick (his real tick usually comes 0.3 - 1.0 s after
+it). (Also tried: no blind reopen whose closing click would run into the
+next flip - 19/60 6th Nights in the simulator, far too costly.)
+
+One more simulator find: a door released after a Foxy check marks the
+animatronic "possibly there" (not seen); a Chica watch then read a
+lights-out as that one leaving - it was Bonnie arriving. That conclusion
+now needs a real sighting. Simulator, 60 nights: 4/20 60/60 (12.9 %), 6th
+Night 55/60, Night 5 55/60; nobody got in.

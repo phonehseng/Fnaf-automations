@@ -191,6 +191,14 @@ WARMUP_UNTIL = 18.0
 # One side's warm-up: door shut and open again, light on and off.
 WARMUP_CYCLE_SECONDS = (2 * 0.03 + 0.45 + 0.15 + 0.45 + 0.15 + 2 * 0.26 + 0.3)
 
+# A flip that is late still goes ahead for a tick whose earliest moment
+# passed up to this long ago (his real tick usually comes 0.3 - 1.0 s after
+# it, measured): on live 4/20 #21 the bot shut Bonnie's door "before camera
+# flip" a few tenths after Foxy's earliest tick, cycle after cycle, and
+# every one of those flips was dropped - 18 s without a flip.
+LATE_FLIP_GRACE = 1.2
+BLIND_REOPEN_FLIP_GUARD = False     # (tried: far too costly in the simulator, 19/60 6th Nights)
+
 # See Brain._foxy_lag_allowance.
 FOXY_LAG_CAP = 0.3
 
@@ -1560,7 +1568,10 @@ class Brain:
                     seen = other.seen_at_door_at
                     first = self._next_tick(other.who, seen - self._lag_spread(seen) - 0.05)
                     his_first_tick = dark_at < first + self._lag_spread(first) + 0.3
-                    if other.at_door and other.door_closed and his_first_tick:
+                    # (Only for someone actually SEEN there: a door released
+                    # after a Foxy check marks him "possibly there", and a
+                    # lights-out was then once his ARRIVAL - simulator.)
+                    if other.at_door and other.seen_for_sure and other.door_closed and his_first_tick:
                         other.at_door = False
                         other.min_moves = other.distance[other.repelled_to]
                         other.checked_since_tick = True
@@ -1624,8 +1635,14 @@ class Brain:
         # is exactly what the reopen saves. (A fixed minimum window used to
         # decide this; it refused reopens that would have saved a charge,
         # and the door stayed shut for the whole next cycle - five charges.)
+        # ... and not if its closing click would run into the next Foxy flip:
+        # the door is then shut "before camera flip", late, and the flip is
+        # lost (live 4/20 #21).
+        window = self._freeze_window(now)
+        flip_clash = (BLIND_REOPEN_FLIP_GUARD and close_at is not None and window is not None
+                      and window[0] < close_at + PAN_SECONDS + BUTTON_COOLDOWN)
         if (close_at is None or self._open_charges_saved(open_done, close_at) < 1
-                or close_at - open_done < BLIND_MIN_OPEN):
+                or close_at - open_done < BLIND_MIN_OPEN or flip_clash):
             watch.reopen_after = self._tick_after(watch, now) + TICK_SETTLE + self._lag_spread(now)
             return
         self._press_door(watch, reason="reopen blind")
@@ -1697,7 +1714,8 @@ class Brain:
         4/20 #20 a blind reopen and Chica's checks pushed the flip past his
         earliest tick each cycle, and he went 25 s without a single flip."""
         reach = self.body.camera_up_seconds + FOXY_CLOCK_MARGIN
-        return now + reach - FOXY_PHASE_SPREAD - self._foxy_lag_allowance(now)
+        late = max(self._foxy_lag_allowance(now), LATE_FLIP_GRACE)
+        return now + reach - FOXY_PHASE_SPREAD - late
 
     def _next_freeze_start(self, now: float) -> float | None:
         """When to start raising the camera for the next Foxy tick (or None)."""
