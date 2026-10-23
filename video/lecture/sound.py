@@ -259,6 +259,21 @@ def fx_freddy(put, cue, d):
     put(bell(196, 3.0, 0.25), cue(2) + 0.5, 1.0)
 
 
+
+def fx_freddyai(put, cue, d):
+    put(boom(), 0.5, 0.35)
+    for k in np.arange(cue(1), cue(3), 3.02):          # his 3.02 s roll
+        put(dice(), k, 0.35)
+    put(time_stop(), cue(2), 0.6)                      # watched: the countdown resets
+    walk_from, walk_to = cue(3) + 2.2, cue(4) - 0.4
+    for j in range(5):                                 # five rooms to the corner
+        for k in range(2):
+            put(footstep(), walk_from + j * (walk_to - walk_from) / 5 + k * 0.25, 0.8)
+    put(blip(300, 0.3), cue(4), 0.6)
+    put(blip(250, 0.3), cue(4) + 0.4, 0.6)
+    put(screech(0.6), cue(4) + 1.2, 0.35)
+    put(bell(196, 3.0, 0.25), cue(5) + 0.5, 1.0)
+
 def fx_foxy(put, cue, d):
     run = cue(4) + 1
     for k in range(1, 4):
@@ -320,9 +335,167 @@ def fx_closing(put, cue, d):
     put(boom(), d - 3.0 + 0.35, 0.6)
 
 
-TENSE = {"title": 0.3, "budget": 0.3, "first": 0.4, "map": 0.3, "ai": 0.2, "doorway": 0.6, "freddy": 0.6,
+TENSE = {"title": 0.3, "budget": 0.3, "first": 0.4, "map": 0.3, "ai": 0.2, "doorway": 0.6, "freddy": 0.6, "freddyai": 0.6,
          "foxy": 0.7, "senses": 0.15, "match": 0.15, "plan": 0.25, "sim": 0.2, "hurdles": 0.9, "attempts": 0.5,
          "results": 0.1, "closing": 0.4}
+
+
+# ---------------------------------------------------------------- the shorts' scenes and music
+def fx_clip(put, cue, d):
+    put(static(0.4), 0.0, 0.5)
+    put(boom(), 0.1, 0.35)
+
+
+def fx_cams(put, cue, d):
+    pass                                               # the cuts inside get their static from cams_cuts
+
+
+def fx_route(put, cue, d):
+    for k in np.arange(0.6, d - 0.8, 0.9):
+        put(footstep(), k, 0.6)
+
+
+def fx_roll(put, cue, d):
+    for k in np.arange(0.05, d, 3.02):
+        put(dice(), k, 0.5)
+
+
+def fx_watch(put, cue, d):
+    for k in np.arange(0.0, d, 2.2):
+        put(whoosh(0.4), k, 0.25)                      # the monitor goes up
+        put(footstep(), k + 1.3, 0.7)                  # and he steps closer while it is down
+
+
+def fx_corner(put, cue, d):
+    put(blip(300, 0.3), 0.15 * d, 0.6)
+    put(blip(250, 0.3), 0.35 * d, 0.6)
+    for j in range(3):
+        put(footstep(), 0.62 * d + j * 0.35, 0.9)
+    put(screech(0.9), 0.62 * d + 1.0, 0.5)
+
+
+def fx_answer(put, cue, d):
+    put(bell(196, 3.0, 0.25), 0.5, 1.0)
+    put(chime(), d * 0.6, 0.35)
+
+
+def fx_recap(put, cue, d):
+    for i in range(4):
+        put(blip(660 + i * 110, 0.12), 0.5 + i * (d * 0.55 / 4), 0.6)
+
+
+def fx_lock(put, cue, d):
+    for k in np.arange(0.0, d, 2.4):
+        put(whoosh(0.4), k, 0.25)
+        for j in range(12):
+            put(tick(), k + j * 0.1, 0.2)              # the re-rolls, ten a second
+
+
+def fx_pause(put, cue, d):
+    put(time_stop(), 0.25 * d, 1.0)
+
+
+def fx_bangs(put, cue, d):
+    for j in range(7):
+        put(footstep(), j * 0.2, 0.7)
+    for b in (1.6, 2.6, 3.6):
+        put(metal_bang(), min(b, d - 1.2), 0.8)
+
+
+def fx_flips(put, cue, d):
+    for k in np.arange(0.5, d, 5.01 / 0.6):
+        put(whoosh(0.4), k, 0.3)
+
+
+
+def fx_versus(put, cue, d):
+    put(whoosh(0.6), 0.1, 0.5)
+    for k in np.arange(0.4, d, 1.0):                   # the power charges
+        put(tick(), k, 0.25)
+    put(screech(0.8), d * 0.7, 0.4)                    # the human's side goes wrong
+    put(chime(), d * 0.85, 0.3)
+
+
+def fx_sneak(put, cue, d):
+    for j in range(5):
+        put(footstep(), d * 0.3 + j * 0.6, 0.6)
+    put(screech(1.0), d * 0.78, 0.7)
+    put(boom(), d * 0.78, 0.6)
+
+
+def fx_slowpath(put, cue, d):
+    for k in np.arange(0.6, d, 1.36):
+        put(footstep(), k, 0.5)
+
+
+def fx_guardwatch(put, cue, d):
+    put(bell(196, 3.0, 0.25), 0.5, 1.0)
+    put(chime(), d * 0.6, 0.35)
+
+
+def fx_foxyoffice(put, cue, d):
+    for j in range(8):
+        put(footstep(), j * 0.18, 0.7)
+    put(door_slam(), d * 0.32, 0.9)
+    for b in (0.45, 0.6, 0.75):
+        put(metal_bang(), d * b, 0.8)
+
+
+def fx_blind(put, cue, d):
+    for k in np.arange(0.0, d * 0.82, 1.0):
+        put(tick(), k, 0.8)
+    for j in range(5):
+        put(footstep(), d * 0.25 + j * 0.7, 0.5)
+    put(screech(1.0), d * 0.82, 0.7)
+    put(boom(), d * 0.82, 0.6)
+
+
+def fx_night(put, cue, d):
+    for at in (0.18, 0.34, 0.52, 0.66, 0.8):
+        put(footstep(), at * d, 0.6)
+        put(door_slam(), at * d + 0.45, 0.5)
+    put(chime(), d * 0.93, 0.8)
+
+
+def fx_code(put, cue, d):
+    put(tick(), 0.3, 0.6)
+
+
+TENSE.update({"clip": 0.6, "cams": 0.5, "route": 0.4, "roll": 0.3, "watch": 0.7, "corner": 0.9, "answer": 0.3,
+              "recap": 0.2, "versus": 0.6, "sneak": 0.9, "slowpath": 0.5, "guardwatch": 0.3, "foxyoffice": 0.9, "blind": 0.8, "night": 0.6, "lock": 0.5, "pause": 0.4, "bangs": 0.9, "flips": 0.3, "code": 0.4})
+
+
+def short_music(total, intensity):
+    """A beat under the shorts: 96 BPM, kick and snare, eighth-note hats, a
+    minor bassline, over the same drone and pad as the long form."""
+    t = t_axis(total)
+    bed = music(total, intensity) * 0.6
+    beat = 60 / 96
+    drums = np.zeros_like(t)
+    bass_notes = [55.0, 55.0, 43.65, 49.0]             # A1 A1 F1 G1, one per bar
+    for n, k in enumerate(np.arange(0, total - 0.5, beat)):
+        s = int(k * RATE)
+        if n % 2 == 0:
+            kk = thud(52, 0.35, 0.4) * 0.9
+            drums[s:s + len(kk)] += kk[: max(0, len(drums) - s)]
+        else:
+            sn = (noise(0.18) - lowpass(noise(0.18), 1800)) * env(int(0.18 * RATE), 0.002, 0.05) * 0.5
+            drums[s:s + len(sn)] += sn[: max(0, len(drums) - s)]
+        for h in (0, beat / 2):
+            hs = int((k + h) * RATE)
+            hh = (noise(0.05) - lowpass(noise(0.05), 6000)) * env(int(0.05 * RATE), 0.001, 0.012) * 0.25
+            drums[hs:hs + len(hh)] += hh[: max(0, len(drums) - hs)]
+    bass = np.zeros_like(t)
+    for bar, k in enumerate(np.arange(0, total, beat * 4)):
+        f = bass_notes[bar % 4]
+        for j in range(4):
+            s, n = int((k + j * beat) * RATE), int(beat * 0.9 * RATE)
+            tt = np.arange(n) / RATE
+            note = (np.sin(2 * np.pi * f * tt) + 0.35 * np.sin(2 * np.pi * f * 2 * tt)) * env(n, 0.005, beat * 0.6) * 0.5
+            bass[s:s + n] += note[: max(0, len(bass) - s)]
+    inten = np.interp(t, *zip(*intensity))
+    fade_in = np.minimum(1, t / 1.5)
+    return bed + (drums * (0.55 + 0.45 * inten) + bass * 0.7) * fade_in
 
 
 def mix_production(pid, prod, timing):
@@ -348,12 +521,16 @@ def mix_production(pid, prod, timing):
             put(static(0.35), -0.2, 0.9)
             put(whoosh(0.8), -0.5, 0.6)
         globals()["fx_" + scene["draw"]](put, cue, d)
+        if scene["draw"] == "cams":                    # a static burst at each camera cut
+            for j in range(1, len(scene["cams"])):
+                put(static(0.25), j * d / len(scene["cams"]), 0.7)
     points = [(0, 0.3)]
     for i, scene in enumerate(scenes):
         tension = TENSE[scene["draw"]]
         points += [(start[i] + 0.5, tension), (start[i] + timing[str(i)]["dur"] - 0.5, tension)]
     points.append((total, 0.2))
-    bed = music(total, points)
+    short = pid.startswith("short_")
+    bed = short_music(total, points) if short else music(total, points)
     n = min(len(bed), len(sfx))
     bed, fx = bed[:n], sfx[:n]
     bed *= np.minimum(1, np.minimum(np.arange(n) / RATE / 2.0, (n / RATE - np.arange(n) / RATE) / 3.0))
@@ -371,7 +548,10 @@ def mix_production(pid, prod, timing):
             w.writeframes((np.stack([x, x], 1) * 32767).astype(np.int16).tobytes())
         print("wrote", name, f"{len(x) / RATE:.1f} s")
 
-    write(f"mix_{pid}_narrated.wav", voice + bed * 0.55 * duck + fx * 0.5)
+    if short:   # the shorts' music stays up under the voice
+        write(f"mix_{pid}_narrated.wav", voice + bed * 0.5 * (0.55 + 0.45 * duck) + fx * 0.55)
+    else:
+        write(f"mix_{pid}_narrated.wav", voice + bed * 0.55 * duck + fx * 0.5)
     if prod["layout"] == "landscape":                  # only the long form gets a cut without the narrator
         write(f"mix_{pid}_ambient.wav", bed * 0.8 + fx * 0.75)
 

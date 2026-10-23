@@ -8,7 +8,7 @@ are large); these scripts rebuild them from the OBS recordings.
 |---|---|---|
 | 1 | `productions.json` -> `sync_productions.py` | the narration of every production, copied into the page |
 | 2 | `narrate.py [production ...]` | Piper TTS narration per production, exact cue timings written into the page |
-| 3 | `export_footage.py` | the OBS clips the footage windows show, as JPEG frames |
+| 3 | `export_footage.py`, `prepare_stills.py` | the OBS clips the footage windows show, real game pictures and live frames; `tools/capture_freddy.py` films Freddy for them |
 | 4 | `render_all.sh` (`render_frames.py PRODUCTION`) | the animation, frame by frame, in headless Chromium |
 | 5 | `sound.py [production ...]` | synthesized music and sound effects; narrated mixes, and a no-narrator mix of the long form |
 | 6 | `mux.py [production ...]` | the final MP4s |

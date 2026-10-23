@@ -23,6 +23,8 @@ OUTPUTS = [
     ("short_foxy", "narrated", "shorts/why_watching_foxy_freezes_him.mp4"),
     ("short_first", "narrated", "shorts/my_first_fnaf_bot_never_looked.mp4"),
     ("short_sees", "narrated", "shorts/how_a_bot_sees_fnaf.mp4"),
+    ("short_freddy", "narrated", "shorts/freddys_ai_explained.mp4"),
+    ("short_versus", "narrated", "shorts/human_vs_robot_night_guard.mp4"),
 ]
 for pid, mix, rel in OUTPUTS:
     if sys.argv[1:] and pid not in sys.argv[1:]:

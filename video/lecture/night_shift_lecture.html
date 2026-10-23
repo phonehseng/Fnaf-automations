@@ -57,8 +57,8 @@ body.film .stage { width: 1080px; height: 1920px; border-radius: 0; }
   <p class="note">The animated half of a lecture film about FNAF Automations, a Python and OpenCV bot that plays Five Nights at Freddy's 1 by watching the screen. Every rule shown comes from the game's own event rows, read from an offline copy, and every number from the bot's live logs. In the film, the footage windows show the bot's real recordings.</p>
 </div>
 
-<script id="productions" type="application/json">{"long": {"label": "Long form (16:9)", "layout": "landscape", "scenes": [{"draw": "title", "cues": ["5:49 AM, in-game. Freddy, Bonnie, Chica and Foxy are all set to 20, the hardest the game allows.", "The battery reads 11%. And nobody is touching the mouse.", "This is a Python program playing Five Nights at Freddy's by itself. It watches the screen with OpenCV and moves the mouse.", "Tonight's lecture: how it works, why the first attempt failed, and the twenty-eight nights it took to win."]}, {"draw": "budget", "cues": ["Custom Night at 20/20/20/20 is the game's hardest setting. Every animatronic moves at every chance it gets.", "The battery holds 999 units, and the night lasts 535 seconds.", "The game itself takes one unit a second, plus one every three seconds: 71% of the battery, gone before you touch anything.", "Everything you do, every door, every light, every look at the cameras, has to fit in the remaining 29%.", "And power is charged once a second, for whatever is on at that instant. Remember that."]}, {"draw": "first", "cues": ["November 2023. The first commit of this repository: 230 lines of PyAutoGUI.", "Look closely: three fatal design decisions.", "First: pyautogui.PAUSE = 1. Every mouse call sleeps one full second afterwards.", "In this game an animatronic gets a movement opportunity every 4.97 seconds.", "A bot that spends a second per gesture has lost the race before it starts.", "Second: it is open-loop. Light, door, cameras, light, door, and the script ends.", "It never asks what the light showed.", "Third: its only sense was one template match, at a confidence of 0.6: am I looking at the cameras?", "No power, no clock, no animatronics. A blindfolded night guard with a metronome.", "The README later said it plainly: sadly not complete."]}, {"draw": "map", "cues": ["Before we can fight the animatronics, we must understand them. Here is the pizzeria from above.", "Bonnie takes the west side: the backstage, the west hall and the supply closet, to the left door.", "Chica takes the east side: the restrooms, the kitchen and the east hall, to the right door.", "Freddy follows Chica's side, slowly. And Foxy waits in Pirate Cove, behind a curtain."]}, {"draw": "ai", "cues": ["The game was built in Clickteam Fusion: its logic is a list of event rows.", "Reverse-engineering an offline copy of the game gives us the rules exactly.", "Bonnie's row reads: every 4.97 seconds, if a random number from 1 to 20 is at most Bonnie's AI level, set the counter \"move who?\" to 1.", "Chica's row is the same, at 4.98 seconds, and sets it to 2.", "At level 20 the die always succeeds: Bonnie and Chica move at every opportunity. Perfectly predictable, if you know exactly when it comes.", "And there is only one move-who slot. While a door slides, the move waits."]}, {"draw": "doorway", "cues": ["Nights are lost at the doors. Bonnie and Chica walk up to a doorway on one of their ticks, and stand there.", "On their next tick, if the door is open, they step into the office. Game over.", "So after every tick at which they could have arrived, the bot flashes the hall light and looks.", "If someone is there, the door shuts just before their next tick, they are sent back, and it opens again at once: a shut door costs power every second.", "And a trick: the game switches the hall lights off on the exact frame an animatronic moves. A light left on across a tick is a stopwatch."]}, {"draw": "freddy", "cues": ["Freddy is slow, and patient. He waits on camera 4B, the corner right outside the right door.", "He comes in only through an open right door, and only while the camera shows something other than 4B.", "So every camera flip the bot makes rests on 4B, staring him down. And if 4B is not clear, the right door is shut before it looks anywhere else."]}, {"draw": "foxy", "cues": ["Foxy is different. His opportunity comes every 5.01 seconds, but only once a lock counter has run out.", "While any camera is up, the game re-rolls that lock ten times a second. A well-timed camera flip freezes him.", "But his row checks that the camera is not on Pirate Cove before its timer, and Clickteam only advances a timer it evaluates.", "Looking at Foxy pauses his clock. Measured live: hold the cove for 2.56 s, and his ticks move 2.54 s later.", "At stage 3 he runs. Shut the left door in time and he bangs on it: 1% of the battery, then 6%, then 11%."]}, {"draw": "senses", "cues": ["Now the machine. Sixty times a second it grabs the window, and to OpenCV the game is an array of numbers.", "Power and clock are read with cv2.matchTemplate against the game's own digit sprites. No OCR.", "A white mask keeps the left door's hazard stripes out of the digits; they once made 50% look like 5.", "Doorways are compared with the game's own lit-and-empty pictures. On the monitor, the room label names the camera, and the cove is graded stage by stage.", "And it never reads the game's memory or files while it plays. Everything it knows, it sees, like a player would."]}, {"draw": "match", "cues": ["Here is how it reads the power, slowed right down.", "The game's own ten digit pictures slide across the readout, and OpenCV scores each one at every position.", "Where a digit really is, the score jumps to 1: a perfect match, every time.", "And only white pixels count, so the yellow hazard stripes behind the left door can never pass for a digit again."]}, {"draw": "plan", "cues": ["The brain is a scheduler. Power is charged once a second, so a light flashed between two charges is free.", "A door is shut just in time, half a second before an animatronic's tick, and opened the moment it is sent back.", "Each Foxy flip is placed so the picture covers one of the game's tenth-of-a-second re-lock instants, just before his tick.", "When jobs collide, the bot tries every order of them and keeps the one that makes nothing late.", "Every rule was proven first in a frame-accurate simulator of the event rows."]}, {"draw": "sim", "cues": ["None of this was tried on the real game first.", "The simulator replays the event rows sixty times a second: the same timers, dice and power rules.", "Sixty nights run in a few minutes, and every change is measured: ticks left uncovered, Foxy alerts, power left at 6 AM.", "But a simulator is a model. When the live game disagreed, the live game won, and the change was reverted."]}, {"draw": "hurdles", "cues": ["Theory is cheap. Custom Night took 28 live attempts to win, and every loss was investigated on the recording.", "The timers fall behind: under load they lag real time by up to a second, so ticks were timed from the hall lights.", "The clock drifted. The bot assumed a game second lasts 1.0065 real seconds. The recording, read frame by frame, said exactly 1.000.", "Its calibration window was too narrow to notice. By 6 AM, its idea of between two charges was 3.5 seconds off.", "The start was late. Spotting the first frame of the night took up to 0.4 seconds: enough for Bonnie to walk in at 30 seconds.", "Now the first minute of power changes pins the true start, with a Theil-Sen fit that one bad sample cannot drag.", "And once, two copies of the bot ran at the same time, fighting over one mouse. Those nights were struck off, and the bot now refuses to start twice."]}, {"draw": "attempts", "cues": ["Every live night was logged, and every loss was investigated.", "Bonnie, Chica, Foxy, Freddy, or an empty battery: each loss had a cause, and each cause got a fix.", "Attempt 25 was the first win, with 0% left.", "Attempt 28, after the clock fix, won with 11%."]}, {"draw": "results", "cues": ["Since then, of ten clean live nights, seven reached 6 AM.", "The margins are still thin. The next job is already in the log: Foxy, who still costs too much power."]}, {"draw": "closing", "cues": ["The first bot pressed buttons in the dark. The second watches, measures and plans, and when it is wrong, it records why.", "That is the real difference between the two: not the code, but the method.", "Class dismissed. Mind the left door."]}]}, "lecture_v": {"label": "Lecture (9:16)", "layout": "vertical", "scenes": [{"draw": "title", "cues": ["5:49 AM, in-game. Every animatronic is set to 20, the maximum.", "The battery reads 11%. And nobody is touching the mouse.", "Good evening. Tonight's lecture is about a machine that learned to work the night shift at Freddy Fazbear's Pizza.", "And about the first machine that didn't."]}, {"draw": "first", "cues": ["November 2023. The first commit of this repository: 230 lines of PyAutoGUI.", "Look closely and you will see three fatal design decisions.", "First: pyautogui.PAUSE = 1. Every mouse call sleeps one full second afterwards.", "In this game an animatronic gets a movement opportunity every 4.97 seconds.", "A bot that spends a second per gesture has lost the race before it starts.", "Second: it is open-loop. Light, door, cameras, light, door, and then the script simply ends.", "It never asks what the light showed.", "Third: its only sense was one template match at a confidence of 0.6, answering one question: am I looking at the cameras?", "No power, no clock, no animatronics. A blindfolded night guard with a metronome.", "The README later said it plainly: sadly not complete."]}, {"draw": "map", "cues": ["Before we can fight the animatronics, we must understand them. Here is the pizzeria from above.", "Bonnie takes the west side: the backstage, the west hall and the supply closet, to the left door.", "Chica takes the east side: the restrooms, the kitchen and the east hall, to the right door.", "Freddy follows Chica's side, slowly. And Foxy waits in Pirate Cove, behind a curtain."]}, {"draw": "ai", "cues": ["The game was built in Clickteam Fusion, and its logic is a list of event rows.", "Reverse-engineering an offline copy of the game gives us the rules exactly.", "Bonnie's row reads: every 4.97 seconds, if a random number from 1 to 20 is at most Bonnie's AI level, set the counter \"move who?\" to 1.", "Chica's row is the same, at 4.98 seconds, and sets it to 2.", "At level 20 the die always succeeds. On Custom Night, Bonnie and Chica move at every opportunity: perfectly predictable, if you know exactly when it comes.", "And there is only one move-who slot. A door must be fully open or fully shut for the doorway rule to fire; while it slides, the move waits."]}, {"draw": "foxy", "cues": ["Foxy is different. His opportunity comes every 5.01 seconds, but only once a lock counter has run out.", "While any camera is up, the game re-rolls that lock to 50 + Random(1000) frames, ten times a second. A well-timed camera flip freezes him.", "But his row checks that the camera is not on Pirate Cove before its timer, and Clickteam only advances a timer it evaluates.", "Looking at Foxy pauses his clock. Measured live: hold the cove for 2.56 s, and his ticks move 2.54 s later.", "At stage 3 he runs. Shut the left door in time and he bangs on it: 1% of the battery, then 6%, then 11%."]}, {"draw": "senses", "cues": ["Now the machine. Sixty times a second it grabs the window with mss, and to OpenCV the game is an array of numbers.", "Power and clock are read with cv2.matchTemplate against the game's own digit sprites. No OCR.", "A white mask keeps the left door's hazard stripes out of the digits; they once made 50% look like 5.", "Doorways are compared with the game's own lit-and-empty pictures, only where an animatronic would stand. On the monitor, the room label names the camera, and the cove is graded stage by stage.", "And it never reads the game's memory or files while it plays. Everything it knows, it sees, like a player would."]}, {"draw": "plan", "cues": ["The brain is a scheduler. Power is charged once per second, for whatever is switched on at that instant, so a light flashed between two charges is free.", "A door is shut just in time, half a second before the tick at which an animatronic would step in, and opened again the moment it is sent back.", "Each Foxy flip is placed so the picture covers one of the game's tenth-of-a-second re-lock instants, just before his tick.", "When jobs collide, the bot tries every order of them and keeps the one that makes nothing late.", "Every rule was proven first in a frame-accurate simulator of the event rows, thousands of nights at a time."]}, {"draw": "hurdles", "cues": ["Theory is cheap. Custom Night took 28 live attempts before it was won, and every loss was investigated on the recording.", "The timers fall behind. Under load, the game's timers lag real time by up to a second, so ticks were measured from the hall lights, which switch off on the exact frame an animatronic moves.", "The clock drifted. The bot assumed a game second lasts 1.0065 real seconds. The recording, read frame by frame, said exactly 1.000.", "Its calibration window was too narrow to ever notice. By 6 AM, its idea of between two charges was 3.5 seconds wrong.", "The start was late. Spotting the first frame of the night took up to 0.4 seconds: enough for Bonnie to walk in at 30 seconds.", "Now the first minute of power changes pins the true start, with a Theil-Sen fit that one bad sample cannot drag.", "And once, two copies of the bot ran at the same time, fighting over one mouse. Those nights were struck from the record, and the bot now refuses to start twice."]}, {"draw": "results", "cues": ["With the clock fixed, the same night ends with 11% instead of 0%.", "Of the ten clean live nights since, seven reached 6 AM. The margins are still thin, and every loss is written down in the development log, with its cause."]}, {"draw": "closing", "cues": ["The first bot pressed buttons in the dark. The second one watches, measures and plans, and when it is wrong, it records why.", "That is the real difference between the two: not the code, but the method.", "Class dismissed. Mind the left door."]}]}, "short_whatif": {"label": "Short: What if", "layout": "vertical", "scenes": [{"draw": "title", "cues": ["What if a bot played Five Nights at Freddy's on the hardest setting?", "Every animatronic at 20. Nobody touching the mouse.", "It watches the screen with OpenCV and plans every second of the night."]}, {"draw": "map", "cues": ["Bonnie and Chica walk to the doors on a timer.", "Bonnie comes down the west side.", "Chica comes down the east side.", "Freddy waits, and Foxy hides in Pirate Cove."]}, {"draw": "results", "cues": ["It took 28 attempts to win a single night.", "Now it wins seven nights in ten. Follow for how it works."]}]}, "short_foxy": {"label": "Short: Foxy", "layout": "vertical", "scenes": [{"draw": "foxy", "cues": ["Why does watching Foxy keep him still?", "While any camera is up, the game re-rolls his lock, ten times a second. A camera flip at the right moment freezes him.", "But his code checks that you're not looking at Pirate Cove before his timer runs.", "So looking at him pauses his clock. Hold the cove 2.56 seconds, and he moves 2.54 seconds later.", "At stage 3 he runs. Shut the left door, and he bangs on it: 1%, then 6%, then 11% of your battery."]}]}, "short_first": {"label": "Short: First bot", "layout": "vertical", "scenes": [{"draw": "first", "cues": ["My first FNAF bot, in 2023.", "It had three fatal flaws.", "pyautogui.PAUSE = 1: a full second after every click.", "The animatronics move every 4.97 seconds.", "It was always too slow.", "It was open-loop: light, door, cameras, and the script just ends.", "It never checked what the light showed.", "It could see one thing: am I on the cameras?", "A blindfolded night guard with a metronome.", "The new one watches, measures and plans. Part two next."]}]}, "short_sees": {"label": "Short: How it sees", "layout": "vertical", "scenes": [{"draw": "senses", "cues": ["How does a bot see Five Nights at Freddy's?", "Sixty screenshots a second, read with OpenCV's matchTemplate. No OCR.", "A white mask stops the door's hazard stripes from turning 50% into 5%.", "Doorways are checked against the game's own empty-hallway pictures.", "And it never reads the game's files. Only the screen, like you."]}, {"draw": "match", "cues": ["Here's the trick, slowed down.", "Each of the game's ten digit pictures slides across the power readout.", "Where a digit really is, the score hits 1.", "Only white pixels count. Follow for the rest."]}]}}</script>
-<script id="timing" type="application/json">{"long": {"0": {"dur": 31.334, "cues": [[0.8, 9.02], [9.47, 14.149], [14.599, 23.295], [23.745, 30.234]]}, "1": {"dur": 42.826, "cues": [[0.8, 9.624], [10.074, 17.585], [18.035, 26.928], [27.378, 35.192], [35.642, 41.726]]}, "2": {"dur": 62.537, "cues": [[0.8, 9.531], [9.981, 13.371], [13.821, 21.007], [21.457, 27.82], [28.27, 33.169], [33.619, 40.121], [40.571, 42.974], [43.424, 50.889], [51.339, 57.33], [57.78, 61.437]]}, "3": {"dur": 27.852, "cues": [[0.8, 6.942], [7.392, 13.603], [14.053, 20.09], [20.54, 26.752]]}, "4": {"dur": 46.132, "cues": [[0.8, 6.129], [6.579, 11.78], [12.23, 22.586], [23.036, 28.737], [29.187, 39.346], [39.796, 45.032]]}, "5": {"dur": 41.572, "cues": [[0.8, 7.812], [8.262, 13.905], [14.355, 20.264], [20.714, 30.838], [31.288, 40.472]]}, "6": {"dur": 26.879, "cues": [[0.8, 7.929], [8.379, 14.845], [15.295, 25.779]]}, "7": {"dur": 47.504, "cues": [[0.8, 8.881], [9.331, 16.807], [17.257, 25.477], [25.927, 36.446], [36.896, 46.404]]}, "8": {"dur": 44.091, "cues": [[0.8, 8.37], [8.82, 16.505], [16.955, 24.247], [24.697, 34.658], [35.108, 42.991]]}, "9": {"dur": 26.319, "cues": [[0.8, 4.144], [4.594, 12.047], [12.497, 18.047], [18.497, 25.219]]}, "10": {"dur": 38.089, "cues": [[0.8, 7.882], [8.332, 15.902], [16.352, 24.061], [24.511, 30.85], [31.3, 36.989]]}, "11": {"dur": 30.429, "cues": [[0.8, 4.167], [4.617, 11.827], [12.277, 21.332], [21.782, 29.329]]}, "12": {"dur": 65.773, "cues": [[0.8, 8.892], [9.342, 16.923], [17.373, 27.555], [28.005, 37.119], [37.569, 46.37], [46.82, 54.354], [54.804, 64.673]]}, "13": {"dur": 23.788, "cues": [[0.8, 5.235], [5.685, 12.697], [13.147, 17.594], [18.044, 22.688]]}, "14": {"dur": 13.937, "cues": [[0.8, 5.316], [5.766, 12.837]]}, "15": {"dur": 18.206, "cues": [[0.8, 8.973], [9.423, 13.882], [14.332, 17.106]]}}, "lecture_v": {"0": {"dur": 24.862, "cues": [[0.8, 6.976], [7.426, 12.105], [13.2, 20.596], [21.046, 23.762]]}, "1": {"dur": 65.59, "cues": [[0.8, 9.345], [9.795, 13.928], [14.378, 21.948], [22.398, 28.748], [29.198, 34.144], [34.594, 41.676], [42.126, 44.553], [45.003, 54.001], [54.451, 60.29], [60.74, 64.49]]}, "2": {"dur": 27.875, "cues": [[0.8, 6.918], [7.368, 13.568], [14.018, 20.137], [20.587, 26.775]]}, "3": {"dur": 51.472, "cues": [[0.8, 6.396], [6.846, 12.175], [12.625, 22.877], [23.327, 28.957], [29.407, 40.704], [41.154, 50.372]]}, "4": {"dur": 50.465, "cues": [[0.8, 8.904], [9.354, 19.64], [20.09, 28.426], [28.876, 39.406], [39.856, 49.365]]}, "5": {"dur": 47.795, "cues": [[0.8, 9.531], [9.981, 17.701], [18.151, 25.466], [25.916, 38.269], [38.719, 46.695]]}, "6": {"dur": 43.87, "cues": [[0.8, 10.436], [10.886, 20.139], [20.589, 28.31], [28.76, 35.087], [35.537, 42.77]]}, "7": {"dur": 72.634, "cues": [[0.8, 9.6], [10.05, 22.496], [22.946, 33.151], [33.601, 42.959], [43.409, 52.267], [52.717, 60.461], [60.911, 71.534]]}, "8": {"dur": 18.209, "cues": [[0.8, 6.222], [6.672, 17.109]]}, "9": {"dur": 18.636, "cues": [[0.8, 9.426], [9.876, 14.288], [14.738, 17.536]]}}, "short_whatif": {"0": {"dur": 21.0, "cues": [[0.8, 4.817], [5.267, 9.447], [13.2, 18.215]]}, "1": {"dur": 14.616, "cues": [[0.8, 4.016], [4.466, 6.637], [7.087, 9.49], [9.94, 13.516]]}, "2": {"dur": 9.85, "cues": [[0.8, 4.167], [4.617, 8.75]]}}, "short_foxy": {"0": {"dur": 38.158, "cues": [[0.8, 3.238], [3.688, 11.861], [12.311, 17.222], [17.672, 27.378], [27.828, 37.058]]}}, "short_first": {"0": {"dur": 40.942, "cues": [[0.8, 4.782], [5.232, 7.276], [7.726, 13.345], [13.795, 18.149], [18.599, 20.317], [20.767, 25.701], [26.151, 28.473], [28.923, 31.733], [32.183, 35.039], [35.489, 39.842]]}}, "short_sees": {"0": {"dur": 27.349, "cues": [[0.8, 3.633], [4.083, 10.143], [10.593, 16.41], [16.86, 21.016], [21.466, 26.249]]}, "1": {"dur": 16.52, "cues": [[0.8, 2.843], [3.293, 7.74], [8.19, 11.301], [11.751, 15.42]]}}}</script>
+<script id="productions" type="application/json">{"long": {"label": "Long form (16:9)", "layout": "landscape", "scenes": [{"draw": "title", "cues": ["5:49 AM, in-game. Freddy, Bonnie, Chica and Foxy are all set to 20, the hardest the game allows.", "The battery reads 11%. And nobody is touching the mouse.", "This is a Python program playing Five Nights at Freddy's by itself. It watches the screen with OpenCV and moves the mouse.", "Tonight's lecture: how it works, why the first attempt failed, and the twenty-eight nights it took to win."]}, {"draw": "budget", "cues": ["Custom Night at 20/20/20/20 is the game's hardest setting. Every animatronic moves at every chance it gets.", "The battery holds 999 units, and the night lasts 535 seconds.", "The game itself takes one unit a second, plus one every three seconds: 71% of the battery, gone before you touch anything.", "Everything you do, every door, every light, every look at the cameras, has to fit in the remaining 29%.", "And power is charged once a second, for whatever is on at that instant. Remember that."]}, {"draw": "first", "cues": ["November 2023. The first commit of this repository: 230 lines of PyAutoGUI.", "Look closely: three fatal design decisions.", "First: pyautogui.PAUSE = 1. Every mouse call sleeps one full second afterwards.", "In this game an animatronic gets a movement opportunity every 4.97 seconds.", "A bot that spends a second per gesture has lost the race before it starts.", "Second: it is open-loop. Light, door, cameras, light, door, and the script ends.", "It never asks what the light showed.", "Third: its only sense was one template match, at a confidence of 0.6: am I looking at the cameras?", "No power, no clock, no animatronics. A blindfolded night guard with a metronome.", "The README later said it plainly: sadly not complete."]}, {"draw": "map", "cues": ["Before we can fight the animatronics, we must understand them. Here is the pizzeria from above.", "Bonnie takes the west side: the backstage, the west hall and the supply closet, to the left door.", "Chica takes the east side: the restrooms, the kitchen and the east hall, to the right door.", "Freddy follows Chica's side, slowly. And Foxy waits in Pirate Cove, behind a curtain."]}, {"draw": "ai", "cues": ["The game was built in Clickteam Fusion: its logic is a list of event rows.", "Reverse-engineering an offline copy of the game gives us the rules exactly.", "Bonnie's row reads: every 4.97 seconds, if a random number from 1 to 20 is at most Bonnie's AI level, set the counter \"move who?\" to 1.", "Chica's row is the same, at 4.98 seconds, and sets it to 2.", "At level 20 the die always succeeds: Bonnie and Chica move at every opportunity. Perfectly predictable, if you know exactly when it comes.", "And there is only one move-who slot. While a door slides, the move waits."]}, {"draw": "doorway", "cues": ["Nights are lost at the doors. Bonnie and Chica walk up to a doorway on one of their ticks, and stand there.", "On their next tick, if the door is open, they step into the office. Game over.", "So after every tick at which they could have arrived, the bot flashes the hall light and looks.", "If someone is there, the door shuts just before their next tick, they are sent back, and it opens again at once: a shut door costs power every second.", "And a trick: the game switches the hall lights off on the exact frame an animatronic moves. A light left on across a tick is a stopwatch."]}, {"draw": "freddy", "cues": ["Freddy is slow, and patient. He waits on camera 4B, the corner right outside the right door.", "He comes in only through an open right door, and only while the camera shows something other than 4B.", "So every camera flip the bot makes rests on 4B, staring him down. And if 4B is not clear, the right door is shut before it looks anywhere else."]}, {"draw": "foxy", "cues": ["Foxy is different. His opportunity comes every 5.01 seconds, but only once a lock counter has run out.", "While any camera is up, the game re-rolls that lock ten times a second. A well-timed camera flip freezes him.", "But his row checks that the camera is not on Pirate Cove before its timer, and Clickteam only advances a timer it evaluates.", "Looking at Foxy pauses his clock. Measured live: hold the cove for 2.56 s, and his ticks move 2.54 s later.", "At stage 3 he runs. Shut the left door in time and he bangs on it: 1% of the battery, then 6%, then 11%."]}, {"draw": "senses", "cues": ["Now the machine. Sixty times a second it grabs the window, and to OpenCV the game is an array of numbers.", "Power and clock are read with cv2.matchTemplate against the game's own digit sprites. No OCR.", "A white mask keeps the left door's hazard stripes out of the digits; they once made 50% look like 5.", "Doorways are compared with the game's own lit-and-empty pictures. On the monitor, the room label names the camera, and the cove is graded stage by stage.", "And it never reads the game's memory or files while it plays. Everything it knows, it sees, like a player would."]}, {"draw": "match", "cues": ["Here is how it reads the power, slowed right down.", "The game's own ten digit pictures slide across the readout, and OpenCV scores each one at every position.", "Where a digit really is, the score jumps to 1: a perfect match, every time.", "And only white pixels count, so the yellow hazard stripes behind the left door can never pass for a digit again."]}, {"draw": "plan", "cues": ["The brain is a scheduler. Power is charged once a second, so a light flashed between two charges is free.", "A door is shut just in time, half a second before an animatronic's tick, and opened the moment it is sent back.", "Each Foxy flip is placed so the picture covers one of the game's tenth-of-a-second re-lock instants, just before his tick.", "When jobs collide, the bot tries every order of them and keeps the one that makes nothing late.", "Every rule was proven first in a frame-accurate simulator of the event rows."]}, {"draw": "sim", "cues": ["None of this was tried on the real game first.", "The simulator replays the event rows sixty times a second: the same timers, dice and power rules.", "Sixty nights run in a few minutes, and every change is measured: ticks left uncovered, Foxy alerts, power left at 6 AM.", "But a simulator is a model. When the live game disagreed, the live game won, and the change was reverted."]}, {"draw": "hurdles", "cues": ["Theory is cheap. Custom Night took 28 live attempts to win, and every loss was investigated on the recording.", "The timers fall behind: under load they lag real time by up to a second, so ticks were timed from the hall lights.", "The clock drifted. The bot assumed a game second lasts 1.0065 real seconds. The recording, read frame by frame, said exactly 1.000.", "Its calibration window was too narrow to notice. By 6 AM, its idea of between two charges was 3.5 seconds off.", "The start was late. Spotting the first frame of the night took up to 0.4 seconds: enough for Bonnie to walk in at 30 seconds.", "Now the first minute of power changes pins the true start, with a Theil-Sen fit that one bad sample cannot drag.", "And once, two copies of the bot ran at the same time, fighting over one mouse. Those nights were struck off, and the bot now refuses to start twice."]}, {"draw": "attempts", "cues": ["Every live night was logged, and every loss was investigated.", "Bonnie, Chica, Foxy, Freddy, or an empty battery: each loss had a cause, and each cause got a fix.", "Attempt 25 was the first win, with 0% left.", "Attempt 28, after the clock fix, won with 11%."]}, {"draw": "results", "cues": ["Since then, of ten clean live nights, seven reached 6 AM.", "The margins are still thin. The next job is already in the log: Foxy, who still costs too much power."]}, {"draw": "closing", "cues": ["The first bot pressed buttons in the dark. The second watches, measures and plans, and when it is wrong, it records why.", "That is the real difference between the two: not the code, but the method.", "Class dismissed. Mind the left door."]}]}, "lecture_v": {"label": "Lecture (9:16)", "layout": "vertical", "scenes": [{"draw": "title", "cues": ["5:49 AM, in-game. Every animatronic is set to 20, the maximum.", "The battery reads 11%. And nobody is touching the mouse.", "Good evening. Tonight's lecture is about a machine that learned to work the night shift at Freddy Fazbear's Pizza.", "And about the first machine that didn't."]}, {"draw": "first", "cues": ["November 2023. The first commit of this repository: 230 lines of PyAutoGUI.", "Look closely and you will see three fatal design decisions.", "First: pyautogui.PAUSE = 1. Every mouse call sleeps one full second afterwards.", "In this game an animatronic gets a movement opportunity every 4.97 seconds.", "A bot that spends a second per gesture has lost the race before it starts.", "Second: it is open-loop. Light, door, cameras, light, door, and then the script simply ends.", "It never asks what the light showed.", "Third: its only sense was one template match at a confidence of 0.6, answering one question: am I looking at the cameras?", "No power, no clock, no animatronics. A blindfolded night guard with a metronome.", "The README later said it plainly: sadly not complete."]}, {"draw": "map", "cues": ["Before we can fight the animatronics, we must understand them. Here is the pizzeria from above.", "Bonnie takes the west side: the backstage, the west hall and the supply closet, to the left door.", "Chica takes the east side: the restrooms, the kitchen and the east hall, to the right door.", "Freddy follows Chica's side, slowly. And Foxy waits in Pirate Cove, behind a curtain."]}, {"draw": "ai", "cues": ["The game was built in Clickteam Fusion, and its logic is a list of event rows.", "Reverse-engineering an offline copy of the game gives us the rules exactly.", "Bonnie's row reads: every 4.97 seconds, if a random number from 1 to 20 is at most Bonnie's AI level, set the counter \"move who?\" to 1.", "Chica's row is the same, at 4.98 seconds, and sets it to 2.", "At level 20 the die always succeeds. On Custom Night, Bonnie and Chica move at every opportunity: perfectly predictable, if you know exactly when it comes.", "And there is only one move-who slot. A door must be fully open or fully shut for the doorway rule to fire; while it slides, the move waits."]}, {"draw": "foxy", "cues": ["Foxy is different. His opportunity comes every 5.01 seconds, but only once a lock counter has run out.", "While any camera is up, the game re-rolls that lock to 50 + Random(1000) frames, ten times a second. A well-timed camera flip freezes him.", "But his row checks that the camera is not on Pirate Cove before its timer, and Clickteam only advances a timer it evaluates.", "Looking at Foxy pauses his clock. Measured live: hold the cove for 2.56 s, and his ticks move 2.54 s later.", "At stage 3 he runs. Shut the left door in time and he bangs on it: 1% of the battery, then 6%, then 11%."]}, {"draw": "senses", "cues": ["Now the machine. Sixty times a second it grabs the window with mss, and to OpenCV the game is an array of numbers.", "Power and clock are read with cv2.matchTemplate against the game's own digit sprites. No OCR.", "A white mask keeps the left door's hazard stripes out of the digits; they once made 50% look like 5.", "Doorways are compared with the game's own lit-and-empty pictures, only where an animatronic would stand. On the monitor, the room label names the camera, and the cove is graded stage by stage.", "And it never reads the game's memory or files while it plays. Everything it knows, it sees, like a player would."]}, {"draw": "plan", "cues": ["The brain is a scheduler. Power is charged once per second, for whatever is switched on at that instant, so a light flashed between two charges is free.", "A door is shut just in time, half a second before the tick at which an animatronic would step in, and opened again the moment it is sent back.", "Each Foxy flip is placed so the picture covers one of the game's tenth-of-a-second re-lock instants, just before his tick.", "When jobs collide, the bot tries every order of them and keeps the one that makes nothing late.", "Every rule was proven first in a frame-accurate simulator of the event rows, thousands of nights at a time."]}, {"draw": "hurdles", "cues": ["Theory is cheap. Custom Night took 28 live attempts before it was won, and every loss was investigated on the recording.", "The timers fall behind. Under load, the game's timers lag real time by up to a second, so ticks were measured from the hall lights, which switch off on the exact frame an animatronic moves.", "The clock drifted. The bot assumed a game second lasts 1.0065 real seconds. The recording, read frame by frame, said exactly 1.000.", "Its calibration window was too narrow to ever notice. By 6 AM, its idea of between two charges was 3.5 seconds wrong.", "The start was late. Spotting the first frame of the night took up to 0.4 seconds: enough for Bonnie to walk in at 30 seconds.", "Now the first minute of power changes pins the true start, with a Theil-Sen fit that one bad sample cannot drag.", "And once, two copies of the bot ran at the same time, fighting over one mouse. Those nights were struck from the record, and the bot now refuses to start twice."]}, {"draw": "results", "cues": ["With the clock fixed, the same night ends with 11% instead of 0%.", "Of the ten clean live nights since, seven reached 6 AM. The margins are still thin, and every loss is written down in the development log, with its cause."]}, {"draw": "closing", "cues": ["The first bot pressed buttons in the dark. The second one watches, measures and plans, and when it is wrong, it records why.", "That is the real difference between the two: not the code, but the method.", "Class dismissed. Mind the left door."]}]}, "short_whatif": {"label": "Short: What if", "layout": "vertical", "scenes": [{"draw": "clip", "cues": ["What if a bot played Five Nights at Freddy's on the hardest setting, with nobody touching the mouse? This is it, reaching 6 AM."], "clip": "win28_end", "zoom": [1.0, 1.08], "cam": "LIVE", "card": ["CUSTOM NIGHT", "20/20/20/20", "the hardest setting"], "kicker": "WHAT IF...", "headline": "A BOT PLAYED FNAF ON MAX?"}, {"draw": "cams", "cues": ["Four animatronics, all at level 20. Bonnie and Chica move at every chance, Freddy waits for you to look away, and Foxy runs."], "cams": [["1A_all", "CAM 1A", "SHOW STAGE", 0.5, 0.45], ["2B_bonnie", "CAM 2B", "BONNIE"], ["4B_freddy", "CAM 4B", "FREDDY"], ["1C_s2", "CAM 1C", "FOXY"]], "card": ["THE ANIMATRONICS", "Four of them", "all at level 20"], "kicker": "THE THREAT", "headline": "FOUR AT MAX"}, {"draw": "budget", "cues": ["Worse, the game itself drains 71% of the battery. Every door, light and camera has to fit in the last 29%."], "mode": "split", "card": ["THE BATTERY", "71% gone", "before you touch anything"], "kicker": "THE REAL ENEMY", "headline": "THE POWER"}, {"draw": "night", "cues": ["The bot reads the screen with OpenCV sixty times a second, shutting each door just in time and opening it again the moment it's safe."], "card": ["THE BOT", "No hands", "doors shut just in time"], "kicker": "THE BOT", "headline": "IT WATCHES"}, {"draw": "attempts", "cues": ["It lost its first twenty-four nights. Every loss was recorded, explained, and fixed, until attempt twenty-five reached 6 AM."], "mode": "count", "card": ["LIVE 4/20", "28 attempts", "every one logged"], "kicker": "THE GRIND", "headline": "28 ATTEMPTS"}, {"draw": "results", "cues": ["Now it wins seven nights out of ten, often with power to spare."], "kicker": "THE RESULT", "headline": "SIX AM"}, {"draw": "recap", "cues": ["So yes. A bot can survive the hardest night in Five Nights at Freddy's, by watching the screen and spending power smarter than the animatronics can drain it."], "title": "SO, CAN IT?", "items": ["Max difficulty, no hands", "Wins 7 nights in 10", "Sees only the screen, like you"], "kicker": "THE ANSWER", "headline": "YES. IT CAN."}]}, "short_foxy": {"label": "Short: Foxy", "layout": "vertical", "scenes": [{"draw": "clip", "cues": ["This is Foxy, sprinting down the West Hall toward your left door. Yet he's the one animatronic that freezes when you watch him."], "clip": "foxyrun", "zoom": [1.0, 1.25], "focus": [0.5, 0.45], "cam": "CAM 2A", "card": ["WEST HALL", "Foxy", "the one who runs"], "kicker": "WHY DOES HE FREEZE?", "headline": "THE FOX THAT RUNS"}, {"draw": "cams", "cues": ["He hides in Pirate Cove. Every 5.01 seconds he can move one stage further out, and at stage three he's gone."], "cams": [["1C_s0", "CAM 1C", "STAGE 0"], ["1C_s1", "CAM 1C", "STAGE 1"], ["1C_s2", "CAM 1C", "STAGE 2"], ["1C_s3", "CAM 1C", "STAGE 3: GONE"]], "card": ["PIRATE COVE", "Four stages", "one per successful tick"], "kicker": "PIRATE COVE", "headline": "FOUR STAGES"}, {"draw": "lock", "cues": ["But he can only move once a lock counter runs out. While any camera is up, the game re-rolls that lock ten times a second, so a well-timed camera flip keeps him frozen."], "card": ["HIS LOCK", "Re-rolled", "50 + Random(1000) frames"], "kicker": "THE FREEZE", "headline": "A LOCK ON HIM"}, {"draw": "pause", "cues": ["And looking straight at Pirate Cove pauses his clock completely. Measured live: hold the cove for 2.56 seconds, and his next move comes 2.54 seconds later."], "card": ["THE SURPRISE", "Clock paused", "only on the cove camera"], "kicker": "THE SURPRISE", "headline": "WATCHING PAUSES HIM"}, {"draw": "foxyoffice", "cues": ["When he does run, a shut left door stops him. But every bang costs power: 1% of your battery, then 6%, then 11%."], "card": ["STAGE 3", "He runs", "slam the left door"], "kicker": "THE RUN", "headline": "BANG. BANG. BANG."}, {"draw": "flips", "cues": ["So the bot flips the camera just before every one of his ticks, keeping him locked behind the curtain all night."], "card": ["THE BOT'S ANSWER", "Flip on time", "just before every tick"], "kicker": "THE COUNTER", "headline": "ALWAYS ON TIME"}, {"draw": "recap", "cues": ["That's Foxy. Keep him locked with the camera, and he never gets the chance to run."], "who": "foxy", "title": "FOXY, SOLVED", "items": ["One stage per tick, once unlocked", "Any camera re-locks him", "Watching the cove pauses him", "At stage 3 he runs: shut the left door"], "kicker": "THE WHOLE STORY", "headline": "FREEZE THE FOX"}]}, "short_first": {"label": "Short: First bot", "layout": "vertical", "scenes": [{"draw": "code", "cues": ["In 2023 I wrote a bot to beat Five Nights at Freddy's. It never survived a single night. Here's exactly why."], "flaw": -1, "card": ["MY FIRST BOT  2023", "fnaf_framework", "230 lines of PyAutoGUI"], "kicker": "IT NEVER WON", "headline": "MY FIRST FNAF BOT"}, {"draw": "code", "cues": ["Flaw one: every mouse action had a one-second pause built in, and the animatronics get a move every 4.97 seconds."], "flaw": 0, "card": ["FLAW 1", "PAUSE = 1", "a second after every click"], "stat": ["THEY MOVE EVERY", "4.97 s", "alarm"], "kicker": "TOO SLOW", "headline": "A SECOND PER CLICK"}, {"draw": "blind", "cues": ["Flaw two: it ran a fixed list, light, door, camera, light, door, and then stopped. It never checked what the light showed, so Bonnie just walked in."], "flaw": 1, "card": ["FLAW 2", "Open loop", "it never reads the light"], "kicker": "BLIND", "headline": "IT NEVER LOOKED"}, {"draw": "code", "cues": ["Flaw three: its only sense was one fuzzy image match, asking: am I looking at the cameras? No power, no clock, no animatronics."], "flaw": 2, "card": ["FLAW 3", "One question", "am I on the cameras?"], "kicker": "NO SENSES", "headline": "ONE FUZZY MATCH"}, {"draw": "clip", "cues": ["The new bot looks at the screen sixty times a second, times every move to the frame, and reaches 6 AM on the hardest setting."], "clip": "win28_end", "zoom": [1.0, 1.08], "cam": "LIVE", "card": ["THE NEW BOT  2026", "6 AM", "on the hardest setting"], "kicker": "THE FIX", "headline": "LOOK, THEN ACT"}, {"draw": "recap", "cues": ["Same game, same mouse. The difference wasn't speed. It was looking before acting."], "title": "WHAT CHANGED", "items": ["One click a second, now timed to the frame", "A blind script, now reading every light", "One question, now the whole screen"], "kicker": "THE LESSON", "headline": "LOOK BEFORE YOU ACT"}]}, "short_sees": {"label": "Short: How it sees", "layout": "vertical", "scenes": [{"draw": "clip", "cues": ["This is what a bot sees when it plays Five Nights at Freddy's: sixty screenshots a second, read with OpenCV."], "clip": "office28", "from": 0.25, "to": 0.4, "zoom": [1.0, 1.1], "cam": "LIVE", "card": ["THE BOT'S VIEW", "OpenCV", "60 screenshots a second"], "kicker": "HOW A BOT SEES", "headline": "THE BOT'S VIEW", "pill": "THE BOT'S VIEW"}, {"draw": "match", "cues": ["To read the power, the game's own digit pictures slide across the screen. Where one fits exactly, the match score jumps to one."], "mode": "slide", "card": ["NO OCR", "matchTemplate", "the game's own digits"], "kicker": "READING NUMBERS", "headline": "TEMPLATE MATCHING"}, {"draw": "match", "cues": ["Only pure white pixels count. Without that, the yellow hazard stripes on the left door once made 50% read as 5."], "mode": "mask", "card": ["THE WHITE MASK", "Stripes ignored", "only pure white counts"], "kicker": "A REAL BUG", "headline": "THE HAZARD STRIPES"}, {"draw": "clip", "cues": ["Each doorway is compared with the game's own picture of an empty, lit hallway. Anything different is an animatronic, and the door shuts."], "still": "door_bonnie", "zoom": [1.0, 1.15], "focus": [0.25, 0.5], "cam": "LIVE", "detect": [0.0, 0.18, 0.3, 0.62, "BONNIE DETECTED"], "card": ["THE DOORWAYS", "Bonnie", "spotted, door shut"], "kicker": "SPOTTING THEM", "headline": "BONNIE DETECTED"}, {"draw": "cams", "cues": ["On the monitor, the room name tells it which camera it's on, and each picture is graded: how far out Foxy is, and whether Freddy is at the door."], "cams": [["1C_s2", "CAM 1C", "PIRATE COVE"], ["4B_freddy", "CAM 4B", "E. HALL CORNER"]], "card": ["THE CAMERAS", "Graded", "who is where"], "kicker": "THE CAMERAS", "headline": "WHO IS WHERE"}, {"draw": "recap", "cues": ["No memory reading, no game files. It sees exactly what you see, and that's enough to survive the night."], "title": "WHAT IT USES", "items": ["Screenshots, 60 a second", "The game's own pictures as templates", "A white mask against the stripes", "Never the game's memory or files"], "kicker": "THE WHOLE STORY", "headline": "IT SEES WHAT YOU SEE"}]}, "short_freddy": {"label": "Short: Freddy", "layout": "vertical", "scenes": [{"draw": "clip", "cues": ["Those two dots are Freddy, staring into the corner camera. Look away now, and he walks right in."], "clip": "freddy4b", "zoom": [1.0, 1.5], "focus": [0.47, 0.34], "cam": "LIVE  CAM 4B", "card": ["LIVE  CAM 4B", "Freddy", "staring right back"], "kicker": "DON'T LOOK AWAY", "headline": "THOSE TWO DOTS ARE FREDDY"}, {"draw": "cams", "cues": ["He starts on the show stage, and he won't leave it until Bonnie and Chica have both gone."], "cams": [["1A_all", "CAM 1A", "ALL THREE", 0.5, 0.45], ["1A_freddy", "CAM 1A", "ONLY FREDDY", 0.75, 0.45]], "card": ["SHOW STAGE", "Leaves last", "after Bonnie and Chica"], "kicker": "WHERE HE STARTS", "headline": "THE SHOW STAGE"}, {"draw": "route", "cues": ["Then he takes the east side: the dining area, the restrooms, the kitchen, the east hall, and the corner outside your right door."], "who": "freddy", "route": ["1A", "1B", "7", "6", "4A", "4B"], "others": [["bonnie", "1A"], ["chica", "1A"]], "card": ["HIS ROUTE", "East side", "1B, 7, 6, 4A, 4B"], "kicker": "WHERE HE GOES", "headline": "THE EAST SIDE"}, {"draw": "cams", "cues": ["On camera he's barely there, just two eyes glinting in the dark. The kitchen camera has no picture at all, only sound."], "cams": [["1B_freddy", "CAM 1B", "DINING AREA"], ["7_freddy", "CAM 7", "RESTROOMS"], ["6_kitchen", "CAM 6", "KITCHEN"], ["4A_freddy", "CAM 4A", "EAST HALL"], ["4B_freddy", "CAM 4B", "THE CORNER"]], "route": ["1A", "1B", "7", "6", "4A", "4B"], "card": ["ON CAMERA", "Barely there", "two eyes in the dark"], "kicker": "SPOT HIM", "headline": "ON THE CAMERAS"}, {"draw": "roll", "cues": ["Every 3.02 seconds he rolls a twenty-sided die. A success starts a countdown of 1000 minus 100 times his AI level, in frames. At level 20, that's zero."], "who": "freddy", "period": 3.02, "countdown": ["COUNTDOWN", "1000 - 100 x AI"], "card": ["EVERY 3.02 s", "A d20 roll", "at AI 20: no countdown"], "stat": ["AT AI 20", "0 frames", "go"], "kicker": "HOW HE THINKS", "headline": "A DICE ROLL"}, {"draw": "slowpath", "cues": ["And he only moves while your monitor is down. Every tick that lands while you're watching is a tick he can't use, so keeping your eyes on him slows him down the whole way to 4B."], "card": ["THE CATCH", "Watched = stuck", "no steps while you watch"], "kicker": "THE CATCH", "headline": "WATCHING SLOWS HIM DOWN"}, {"draw": "sneak", "cues": ["At the corner, he walks in only if your right door is open while your camera shows anything but him. Check Pirate Cove a second too long, and he's in the office."], "card": ["AT THE CORNER", "Two conditions", "door open + camera elsewhere"], "kicker": "THE DANGER", "headline": "LOOK AWAY, AND HE'S IN"}, {"draw": "guardwatch", "cues": ["So the bot ends every camera flip on 4B. While it's watching him, he can't come in, and the right door stays open, costing no power."], "card": ["THE BOT'S ANSWER", "Rest on 4B", "every flip ends on him"], "kicker": "THE COUNTER", "headline": "STARE HIM DOWN"}, {"draw": "recap", "cues": ["That's all of Freddy. He moves only when you're not looking, and gets in only when you look away from him. Keep your eyes on 4B, and he never will."], "who": "freddy", "title": "FREDDY, SOLVED", "items": ["Leaves the stage last", "Walks the east side to 4B", "Can't move while you're watching", "Gets in only when you look away"], "kicker": "THE WHOLE STORY", "headline": "KEEP YOUR EYES ON 4B"}]}, "short_versus": {"label": "Short: Human vs robot", "layout": "vertical", "scenes": [{"draw": "versus", "mode": "intro", "cues": ["Same night, every animatronic at maximum. On the left, a human guard who doesn't know the rules. On the right, a robot that knows every one of them."], "card": ["CUSTOM NIGHT", "Human vs robot", "20/20/20/20"], "kicker": "WHO SURVIVES?", "headline": "HUMAN VS ROBOT"}, {"draw": "versus", "mode": "power", "cues": ["The human shuts a door the moment anything moves and leaves the lights on to feel safe, and every second of that costs power. The robot shuts each door just before an animatronic's move, and flashes the lights between the game's once-a-second power charges, for free."], "card": ["ROUND 1", "Power", "shut just in time"], "kicker": "ROUND 1", "headline": "THE BATTERY"}, {"draw": "versus", "mode": "freddy", "cues": ["The human checks Pirate Cove with the right door open, and Freddy walks right in. The robot knows Freddy's rule, and ends every camera flip on 4B."], "card": ["ROUND 2", "Freddy", "eyes back on 4B"], "kicker": "ROUND 2", "headline": "FREDDY"}, {"draw": "versus", "mode": "timing", "cues": ["A person reacts. The robot's clicks land on the exact frame they were planned for, sixty frames a second, timed to the game's own clock."], "card": ["ROUND 3", "Timing", "60 frames a second"], "kicker": "ROUND 3", "headline": "REACTION TIME"}, {"draw": "versus", "mode": "foxy", "cues": ["The human forgets about Foxy until he's already running. The robot flips the camera just before each of his moves, so he never leaves the curtain."], "card": ["ROUND 4", "Foxy", "a flip before every tick"], "kicker": "ROUND 4", "headline": "FOXY"}, {"draw": "versus", "mode": "result", "cues": ["The human's battery dies at 4 AM, and Freddy comes for them in the dark. The robot reaches 6 AM, with power left."], "card": ["THE RESULT", "6 AM", "with power to spare"], "kicker": "THE RESULT", "headline": "LIGHTS OUT VS 6 AM"}, {"draw": "recap", "cues": ["It isn't flawless: the robot still loses about three nights in ten. But it wastes no power, knows every rule, and never misses a frame. That's the whole difference."], "title": "WHY IT WINS", "items": ["Wastes no power", "Knows every animatronic's rules", "Never misses a frame", "Still loses 3 nights in 10: max is that hard"], "kicker": "THE DIFFERENCE", "headline": "KNOWLEDGE, NOT LUCK"}]}}</script>
+<script id="timing" type="application/json">{"long": {"0": {"dur": 31.334, "cues": [[0.8, 9.02], [9.47, 14.149], [14.599, 23.295], [23.745, 30.234]]}, "1": {"dur": 42.826, "cues": [[0.8, 9.624], [10.074, 17.585], [18.035, 26.928], [27.378, 35.192], [35.642, 41.726]]}, "2": {"dur": 62.537, "cues": [[0.8, 9.531], [9.981, 13.371], [13.821, 21.007], [21.457, 27.82], [28.27, 33.169], [33.619, 40.121], [40.571, 42.974], [43.424, 50.889], [51.339, 57.33], [57.78, 61.437]]}, "3": {"dur": 27.852, "cues": [[0.8, 6.942], [7.392, 13.603], [14.053, 20.09], [20.54, 26.752]]}, "4": {"dur": 46.132, "cues": [[0.8, 6.129], [6.579, 11.78], [12.23, 22.586], [23.036, 28.737], [29.187, 39.346], [39.796, 45.032]]}, "5": {"dur": 41.572, "cues": [[0.8, 7.812], [8.262, 13.905], [14.355, 20.264], [20.714, 30.838], [31.288, 40.472]]}, "6": {"dur": 26.879, "cues": [[0.8, 7.929], [8.379, 14.845], [15.295, 25.779]]}, "7": {"dur": 47.504, "cues": [[0.8, 8.881], [9.331, 16.807], [17.257, 25.477], [25.927, 36.446], [36.896, 46.404]]}, "8": {"dur": 44.091, "cues": [[0.8, 8.37], [8.82, 16.505], [16.955, 24.247], [24.697, 34.658], [35.108, 42.991]]}, "9": {"dur": 26.319, "cues": [[0.8, 4.144], [4.594, 12.047], [12.497, 18.047], [18.497, 25.219]]}, "10": {"dur": 38.089, "cues": [[0.8, 7.882], [8.332, 15.902], [16.352, 24.061], [24.511, 30.85], [31.3, 36.989]]}, "11": {"dur": 30.429, "cues": [[0.8, 4.167], [4.617, 11.827], [12.277, 21.332], [21.782, 29.329]]}, "12": {"dur": 65.773, "cues": [[0.8, 8.892], [9.342, 16.923], [17.373, 27.555], [28.005, 37.119], [37.569, 46.37], [46.82, 54.354], [54.804, 64.673]]}, "13": {"dur": 23.788, "cues": [[0.8, 5.235], [5.685, 12.697], [13.147, 17.594], [18.044, 22.688]]}, "14": {"dur": 13.937, "cues": [[0.8, 5.316], [5.766, 12.837]]}, "15": {"dur": 18.206, "cues": [[0.8, 8.973], [9.423, 13.882], [14.332, 17.106]]}}, "lecture_v": {"0": {"dur": 24.862, "cues": [[0.8, 6.976], [7.426, 12.105], [13.2, 20.596], [21.046, 23.762]]}, "1": {"dur": 65.59, "cues": [[0.8, 9.345], [9.795, 13.928], [14.378, 21.948], [22.398, 28.748], [29.198, 34.144], [34.594, 41.676], [42.126, 44.553], [45.003, 54.001], [54.451, 60.29], [60.74, 64.49]]}, "2": {"dur": 27.875, "cues": [[0.8, 6.918], [7.368, 13.568], [14.018, 20.137], [20.587, 26.775]]}, "3": {"dur": 51.472, "cues": [[0.8, 6.396], [6.846, 12.175], [12.625, 22.877], [23.327, 28.957], [29.407, 40.704], [41.154, 50.372]]}, "4": {"dur": 50.465, "cues": [[0.8, 8.904], [9.354, 19.64], [20.09, 28.426], [28.876, 39.406], [39.856, 49.365]]}, "5": {"dur": 47.795, "cues": [[0.8, 9.531], [9.981, 17.701], [18.151, 25.466], [25.916, 38.269], [38.719, 46.695]]}, "6": {"dur": 43.87, "cues": [[0.8, 10.436], [10.886, 20.139], [20.589, 28.31], [28.76, 35.087], [35.537, 42.77]]}, "7": {"dur": 72.634, "cues": [[0.8, 9.6], [10.05, 22.496], [22.946, 33.151], [33.601, 42.959], [43.409, 52.267], [52.717, 60.461], [60.911, 71.534]]}, "8": {"dur": 18.209, "cues": [[0.8, 6.222], [6.672, 17.109]]}, "9": {"dur": 18.636, "cues": [[0.8, 9.426], [9.876, 14.288], [14.738, 17.536]]}}, "short_whatif": {"0": {"dur": 8.908, "cues": [[0.25, 8.458]]}, "1": {"dur": 9.651, "cues": [[0.25, 9.201]]}, "2": {"dur": 9.965, "cues": [[0.25, 9.515]]}, "3": {"dur": 9.872, "cues": [[0.25, 9.422]]}, "4": {"dur": 9.93, "cues": [[0.25, 9.48]]}, "5": {"dur": 4.949, "cues": [[0.25, 4.499]]}, "6": {"dur": 11.079, "cues": [[0.25, 10.629]]}}, "short_foxy": {"0": {"dur": 8.502, "cues": [[0.25, 8.052]]}, "1": {"dur": 9.257, "cues": [[0.25, 8.807]]}, "2": {"dur": 11.764, "cues": [[0.25, 11.314]]}, "3": {"dur": 14.051, "cues": [[0.25, 13.601]]}, "4": {"dur": 10.267, "cues": [[0.25, 9.817]]}, "5": {"dur": 7.26, "cues": [[0.25, 6.81]]}, "6": {"dur": 5.832, "cues": [[0.25, 5.382]]}}, "short_first": {"0": {"dur": 10.034, "cues": [[0.25, 9.584]]}, "1": {"dur": 9.907, "cues": [[0.25, 9.457]]}, "2": {"dur": 10.743, "cues": [[0.25, 10.293]]}, "3": {"dur": 10.336, "cues": [[0.25, 9.886]]}, "4": {"dur": 9.187, "cues": [[0.25, 8.737]]}, "5": {"dur": 6.575, "cues": [[0.25, 6.125]]}}, "short_sees": {"0": {"dur": 8.281, "cues": [[0.25, 7.831]]}, "1": {"dur": 8.908, "cues": [[0.25, 8.458]]}, "2": {"dur": 9.338, "cues": [[0.25, 8.888]]}, "3": {"dur": 9.477, "cues": [[0.25, 9.027]]}, "4": {"dur": 10.197, "cues": [[0.25, 9.747]]}, "5": {"dur": 8.223, "cues": [[0.25, 7.773]]}}, "short_freddy": {"0": {"dur": 7.178, "cues": [[0.25, 6.728]]}, "1": {"dur": 6.366, "cues": [[0.25, 5.916]]}, "2": {"dur": 9.303, "cues": [[0.25, 8.853]]}, "3": {"dur": 8.676, "cues": [[0.25, 8.226]]}, "4": {"dur": 14.086, "cues": [[0.25, 13.636]]}, "5": {"dur": 11.938, "cues": [[0.25, 11.488]]}, "6": {"dur": 10.754, "cues": [[0.25, 10.304]]}, "7": {"dur": 10.104, "cues": [[0.25, 9.654]]}, "8": {"dur": 10.011, "cues": [[0.25, 9.561]]}}, "short_versus": {"0": {"dur": 10.673, "cues": [[0.25, 10.223]]}, "1": {"dur": 17.778, "cues": [[0.25, 17.328]]}, "2": {"dur": 10.464, "cues": [[0.25, 10.014]]}, "3": {"dur": 9.651, "cues": [[0.25, 9.201]]}, "4": {"dur": 10.162, "cues": [[0.25, 9.712]]}, "5": {"dur": 9.059, "cues": [[0.25, 8.609]]}, "6": {"dur": 11.822, "cues": [[0.25, 11.372]]}}}</script>
 
 <script>
 (() => {
@@ -99,7 +99,7 @@ const SCENES = PROD.scenes.map((s, si) => {
     let at = 0.6; cues = [];
     for (const text of s.cues) { const d = text.split(/\s+/).length / 2.6; cues.push({ text, a: at, b: at + d }); at += d + 0.45; }
   }
-  return { id: s.draw, cues, dur: t ? t.dur : cues[cues.length - 1].b + 1.2 };
+  return { id: s.draw, p: s, cues, dur: t ? t.dur : cues[cues.length - 1].b + 1.2 };
 });
 let total = 0;
 for (const s of SCENES) { s.start = total; total += s.dur; }
@@ -113,6 +113,7 @@ const ease = k => { k = clamp(k); return k < 0.5 ? 4 * k * k * k : 1 - Math.pow(
 const rand = i => { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
 const appear = (u, at, len = 0.45) => ease((u - at) / len);
 let CUE = [];
+let SP = {};                 // the current scene's settings (productions.json)
 const cue = i => (CUE[Math.min(i, CUE.length - 1)] || { a: 0 }).a;
 
 function text(str, x, y, { size = 40, font = F.head, weight = "400", color = C.paper, align = "left", alpha = 1, spacing = 0, shadow = false } = {}) {
@@ -597,21 +598,23 @@ DRAW.budget = (u, d) => {
   const bx = 150, by = 470, bw = 260, bh = 640;
   fillR(bx + 80, by - 34, 100, 40, 8, "#4a4f54");
   fillR(bx, by, bw, bh, 26, "#1a1c1e");
-  const full = appear(u, cue(1), 1.2);
-  const game = 0.714 * appear(u, cue(2), 1.6);
+  const split = SP.mode === "split";
+  const full = appear(u, split ? 0.2 : cue(1), split ? 0.8 : 1.2);
+  const game = 0.714 * appear(u, split ? d * 0.3 : cue(2), 1.6);
   const fillH = (bh - 24) * full;
   fillR(bx + 12, by + 12 + (bh - 24) - fillH, bw - 24, fillH, 16, C.gold);
   if (game > 0) {
     const gh = (bh - 24) * game;
     fillR(bx + 12, by + 12 + (bh - 24) - gh, bw - 24, gh, 16, "#5c6267");
-    label("THE GAME'S", bx + bw / 2, by + bh - 70, "#e8e8e4", appear(u, cue(2) + 1), 24);
-    label("OWN DRAIN 71%", bx + bw / 2, by + bh - 38, "#e8e8e4", appear(u, cue(2) + 1), 24);
+    label("THE GAME'S", bx + bw / 2, by + bh - 70, "#e8e8e4", appear(u, (split ? d * 0.3 : cue(2)) + 1), 24);
+    label("OWN DRAIN 71%", bx + bw / 2, by + bh - 38, "#e8e8e4", appear(u, (split ? d * 0.3 : cue(2)) + 1), 24);
   }
-  if (u > cue(3)) { label("YOURS", bx + bw / 2, by + 90, "#151515", appear(u, cue(3)), 30); label("29%", bx + bw / 2, by + 140, "#151515", appear(u, cue(3)), 44); }
+  const yoursAt = split ? d * 0.6 : cue(3);
+  if (u > yoursAt) { label("YOURS", bx + bw / 2, by + 90, "#151515", appear(u, yoursAt), 30); label("29%", bx + bw / 2, by + 140, "#151515", appear(u, yoursAt), 44); }
   text("999", bx + bw / 2, by - 60, { size: 54, font: F.head, weight: "900", align: "center", alpha: full });
   // the once-a-second charge: devices on at the tick cost a unit, a light
   // flashed between ticks costs nothing
-  const ca = appear(u, cue(4), 0.6);
+  const ca = split ? 0 : appear(u, cue(4), 0.6);
   if (ca > 0) {
     const x0 = 480, y0 = 540, sec = Math.floor(u - cue(4)), frac = (u - cue(4)) % 1;
     ctx.save(); ctx.globalAlpha = ca;
@@ -630,6 +633,7 @@ DRAW.budget = (u, d) => {
     text("CHARGE", x0 + 270, y0 + 450, { size: 26, font: F.mono, weight: "700", align: "center", color: "#151515" });
     ctx.restore();
   }
+  if (SP.card) { cards(u, d); return sceneWords(); }
   if (u < cue(1)) infoCard("CUSTOM NIGHT", "20/20/20/20", "every animatronic at max", appear(u, 0.3));
   else if (u < cue(2)) infoCard("THE BATTERY", "999 units", "one night, 535 seconds", 1);
   else if (u < cue(3)) infoCard("THE GAME TAKES", "71%", "1 a second + 1 every 3 s", 1);
@@ -706,16 +710,16 @@ DRAW.match = (u, d) => {
   backdrop(u, { tint: "#1d2a1f" });
   // the HUD readout, big, and one digit sprite sliding across it
   fillR(64, 470, 952, 300, 22, "#08090a");
-  const stripes = u > cue(3);
+  const stripes = SP.mode ? SP.mode === "mask" : u > cue(3);
   if (stripes) for (let i = 0; i < 16; i++) { ctx.fillStyle = i % 2 ? "#a8861f" : "#111"; ctx.beginPath(); ctx.moveTo(520 + i * 34, 490); ctx.lineTo(554 + i * 34, 490); ctx.lineTo(520 + i * 34, 750); ctx.lineTo(486 + i * 34, 750); ctx.fill(); }
   text("Power left:", 110, 650, { size: 64, font: F.mono, weight: "700", color: "#f2f2ee" });
   const digits = "47", dx0 = 640;
   digits.split("").forEach((c, i) => text(c, dx0 + i * 96, 680, { size: 140, font: F.mono, weight: "700", color: "#f2f2ee" }));
   text("%", dx0 + 200, 650, { size: 64, font: F.mono, weight: "700", color: "#f2f2ee" });
   // the sliding template: "4"
-  const slide = clamp((u - cue(1)) / Math.max(1, cue(2) - cue(1) + 1.5));
+  const slide = SP.mode === "slide" ? clamp((u - 0.4) / (d * 0.6)) : SP.mode === "mask" ? 1 : clamp((u - cue(1)) / Math.max(1, cue(2) - cue(1) + 1.5));
   const sx = lerp(110, 900, slide);
-  if (u > cue(1)) {
+  if (SP.mode || u > cue(1)) {
     ctx.save(); ctx.strokeStyle = C.gold; ctx.lineWidth = 5; ctx.strokeRect(sx, 540, 92, 160); ctx.restore();
     text("4", sx + 46, 520, { size: 40, font: F.mono, weight: "700", color: C.gold, align: "center" });
   }
@@ -731,8 +735,9 @@ DRAW.match = (u, d) => {
     x === 110 ? ctx.moveTo(gx(x), gy(v)) : ctx.lineTo(gx(x), gy(v));
   }
   ctx.stroke();
-  if (u > cue(2) && sx > dx0) { label("1.00", gx(dx0), gy(1) - 16, C.go, appear(u, cue(2)), 30); }
+  if ((SP.mode || u > cue(2)) && sx > dx0) { label("1.00", gx(dx0), gy(1) - 16, C.go, appear(u, cue(2)), 30); }
   if (stripes) { fillR(64, 1150, 952, 0, 0, "#000"); pill("WHITE PIXELS ONLY", 64, 400 - 80, appear(u, cue(3))); }
+  if (SP.card) { cards(u, d); return sceneWords(); }
   if (u < cue(1)) infoCard("READING THE HUD", "No OCR", "pictures, not letters", appear(u, 0.3));
   else if (u < cue(2)) infoCard("cv2.matchTemplate", "Slide and score", "ten digit sprites", 1);
   else if (u < cue(3)) infoCard("A PERFECT FIT", "Score 1.00", "the digit is here", 1);
@@ -777,19 +782,21 @@ DRAW.attempts = (u, d) => {
   backdrop(u, { tint: "#221c1c" });
   const col = { B: C.bonnie, C: C.chica, X: C.foxy, F: C.freddy, P: "#6c7277", "?": "#3a3f44", V: "#2a2e31", W: C.go };
   const name = { B: "Bonnie", C: "Chica", X: "Foxy", F: "Freddy", P: "power", "?": "unknown", W: "won" };
-  const shown = Math.floor(clamp((u - 0.4) / Math.max(1, cue(2) - 0.4)) * 28);
+  const count = SP.mode === "count";
+  const shown = Math.floor(clamp((u - 0.4) / Math.max(1, (count ? d * 0.6 : cue(2)) - 0.4)) * 28);
   ATTEMPTS.forEach((c, i) => {
-    if (i >= Math.max(shown, u > cue(2) ? 28 : 0)) return;
+    if (i >= Math.max(shown, !count && u > cue(2) ? 28 : 0)) return;
     const x = 110 + (i % 7) * 132, y = 520 + Math.floor(i / 7) * 132;
-    const big = (c === "W") && u > (i === 24 ? cue(2) : cue(3));
+    const big = (c === "W") && u > (count ? d * 0.65 : i === 24 ? cue(2) : cue(3));
     ctx.fillStyle = col[c]; ctx.beginPath(); ctx.arc(x + 40, y + 40, big ? 48 : 38, 0, 7); ctx.fill();
     text("#" + (i + 1), x + 40, y + 50, { size: 26, font: F.mono, weight: "700", align: "center", color: c === "C" || c === "W" ? "#151515" : "#f2f2ee" });
   });
-  if (u > cue(1)) {
-    const a = appear(u, cue(1));
+  if (count || u > cue(1)) {
+    const a = count ? appear(u, 0.6) : appear(u, cue(1));
     ["B", "C", "X", "F", "P", "?"].forEach((k, i) => { ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = col[k]; ctx.beginPath(); ctx.arc(110 + (i % 3) * 300, 1075 + Math.floor(i / 3) * 50, 14, 0, 7); ctx.fill(); ctx.restore(); text(name[k], 136 + (i % 3) * 300, 1084 + Math.floor(i / 3) * 50, { size: 26, font: F.mono, weight: "700", alpha: a }); });
   }
   const lost = ATTEMPTS.slice(0, Math.max(shown, 1)).filter(c => c !== "W" && c !== "V").length;
+  if (SP.card) { cards(u, d); if (!SP.stat) statCard(u < d * 0.65 ? "NIGHTS LOST" : "FIRST WIN", u < d * 0.65 ? String(lost) : "#25", u < d * 0.65 ? C.alarm : C.go, 1); return sceneWords(); }
   if (u < cue(2)) statCard("NIGHTS LOST", String(lost), C.alarm, appear(u, 0.6));
   else if (u < cue(3)) statCard("FIRST WIN", "#25  0%", C.go, appear(u, cue(2)));
   else statCard("AFTER THE CLOCK FIX", "#28  11%", C.go, appear(u, cue(3)));
@@ -799,7 +806,680 @@ DRAW.attempts = (u, d) => {
   return { kicker: "THE SCOREBOARD", headline: "28 NIGHTS" };
 };
 
+// ---- Freddy's AI, step by step (his own short)
+const FREDDY_PATH = [["1A", "STAGE"], ["1B", "DINING"], ["7", "RESTROOMS"], ["6", "KITCHEN"], ["4A", "E. HALL"], ["4B", "CORNER"], ["YOU", "OFFICE"]];
+DRAW.freddyai = (u, d) => {
+  backdrop(u, { tint: "#2a1d12" });
+  // where he is: on the stage until cue 3, then one room per step to 4B
+  const walkFrom = cue(3) + 2.2, walkTo = cue(4) - 0.4;
+  const step = u < walkFrom ? 0 : Math.min(5, (u - walkFrom) / Math.max(1, walkTo - walkFrom) * 5);
+  // the route as a strip of rooms
+  FREDDY_PATH.forEach(([id, name], i) => {
+    const x = 64 + i * 136, here = Math.round(step) === i;
+    fillR(x, 470, 122, 78, 14, id === "YOU" ? "#3f454a" : here ? "rgba(139,90,50,0.55)" : "#24282c");
+    text(id, x + 61, 506, { size: 26, font: F.mono, weight: "700", align: "center", color: here ? C.paper : "#c9cccf" });
+    text(name, x + 61, 536, { size: 16, font: F.mono, weight: "700", align: "center", color: "#8f959a" });
+    if (i < 6) { ctx.fillStyle = "rgba(255,255,255,0.18)"; ctx.fillRect(x + 122, 507, 14, 4); }
+  });
+  const fx = 64 + 61 + step * 136;
+  animatronic("freddy", fx, 462, 0.2, { look: 1 });
+  // Bonnie and Chica leave the stage first
+  if (u > cue(3) - 0.2 && u < walkFrom + 0.6) {
+    const k = appear(u, cue(3), 1.6);
+    animatronic("bonnie", lerp(125, -60, k), 462, 0.2, { alpha: 1 - k });
+    animatronic("chica", lerp(125, 300, k), 462, 0.2, { alpha: 1 - k });
+  }
+  // the big Freddy, centre stage
+  const watched = u > cue(2) && u < cue(3);
+  animatronic("freddy", 700, 1180, 1.1, { look: Math.sin(u * 0.6), eyesLit: u > cue(4) });
+  // his clock: a 3.02 s ring and the countdown it arms
+  if (u > cue(1) - 0.2 && u < cue(3)) {
+    const a = appear(u, cue(1) - 0.2);
+    const ph = (u % 3.02) / 3.02;
+    ctx.save(); ctx.globalAlpha = a; ctx.lineWidth = 12;
+    ctx.strokeStyle = "rgba(255,255,255,0.1)"; ctx.beginPath(); ctx.arc(200, 680, 74, 0, 7); ctx.stroke();
+    ctx.strokeStyle = C.freddy; ctx.beginPath(); ctx.arc(200, 680, 74, -Math.PI / 2, -Math.PI / 2 + ph * Math.PI * 2); ctx.stroke(); ctx.restore();
+    text("3.02 s", 200, 692, { size: 30, font: F.mono, weight: "700", align: "center", alpha: a });
+    fillR(64, 790, 380, 150, 18, "rgba(8,8,9,0.8)", a);
+    text("COUNTDOWN", 90, 836, { size: 24, font: F.mono, weight: "700", color: "#c8cbcd", alpha: a });
+    text("1000 - 100 x AI", 90, 880, { size: 30, font: F.mono, weight: "700", color: C.gold, alpha: a });
+    text(watched ? "RESET (watched)" : "AI 20: 0 frames", 90, 920, { size: 24, font: F.mono, weight: "700", color: watched ? C.alarm : C.go, alpha: a });
+  }
+  if (watched) {
+    // the camera on his room: an eye on the monitor resets him
+    const a = appear(u, cue(2));
+    fillR(64, 980, 380, 150, 18, "rgba(8,8,9,0.85)", a);
+    text("CAMERA ON HIS ROOM", 90, 1026, { size: 24, font: F.mono, weight: "700", color: "#c8cbcd", alpha: a });
+    text("he waits", 90, 1090, { size: 54, font: F.head, weight: "900", color: C.gold, alpha: a });
+  }
+  // at the corner: the two conditions, then the bot's answer
+  if (u > cue(4) && u < cue(5)) {
+    const a = appear(u, cue(4));
+    [["RIGHT DOOR OPEN", 0], ["A CAMERA, NOT 4B", 1]].forEach(([s, i]) => { fillR(64, 640 + i * 90, 470, 70, 14, "rgba(8,8,9,0.88)", a); text(s, 90, 686 + i * 90, { size: 28, font: F.mono, weight: "700", color: C.alarm, alpha: a }); });
+    label("BOTH TRUE  ->  HE'S IN", 300, 860, C.alarm, appear(u, cue(4) + 1.2), 26);
+  }
+  if (u > cue(5)) {
+    const a = appear(u, cue(5));
+    fillR(64, 640, 440, 300, 22, "#1a1c1e", a); fillR(84, 660, 400, 230, 10, "#0e1012", a);
+    ctx.save(); ctx.globalAlpha = a; animatronic("freddy", 284, 880, 0.42, { look: 1 });
+    ctx.strokeStyle = C.go; ctx.lineWidth = 6; rrect(84, 660, 400, 230, 10); ctx.stroke(); ctx.restore();
+    label("CAM 4B", 160, 700, C.go, a, 22);
+    pill("STARING HIM DOWN", 64, 970, appear(u, cue(5) + 0.6));
+  }
+  if (u < cue(1)) infoCard("CAMERA 4B'S REGULAR", "Freddy", "the patient one", appear(u, 0.3));
+  else if (u < cue(2)) infoCard("EVERY 3.02 s", "A d20 roll", "success arms a countdown", 1);
+  else if (u < cue(3)) infoCard("WHILE YOU WATCH", "He waits", "moves only with the camera down", 1);
+  else if (u < cue(4)) infoCard("HIS ROUTE", "East side", "1B, 7, 6, 4A, 4B", 1);
+  else if (u < cue(5)) infoCard("AT THE CORNER", "Two conditions", "then he's in the office", 1);
+  else infoCard("THE BOT'S ANSWER", "Rest on 4B", "every flip ends on Freddy", 1);
+  return { kicker: "THE PATIENT ONE", headline: u < cue(4) ? "FREDDY'S AI" : "DON'T LOOK AWAY" };
+};
+
+// ---- building blocks for the shorts: real pictures and clips, one idea per scene.
+// A scene's settings come from productions.json (SP); its timing from the scene's
+// own length d, so the same block works anywhere.
+const STILLS = window.STILLS || {};
+function loadImg(src) {
+  if (!src) return null;
+  let img = frameCache.get(src);
+  if (!img) { img = new Image(); img.src = src; frameCache.set(src, img); if (frameCache.size > 300) frameCache.delete(frameCache.keys().next().value); }
+  pending.push(img);
+  return img;
+}
+const stillImg = name => loadImg(FILM ? `stills/${name}.jpg` : STILLS[name]);
+function clipImg(clip, k) {
+  const f = FOOTAGE[clip]; if (!f) return null;
+  const idx = clamp(Math.floor(k * f.frames), 0, f.frames - 1);
+  return loadImg(FILM ? `footage/${clip}/${String(idx + 1).padStart(5, "0")}.jpg` : f.still);
+}
+// Draw an image to fill a box, zoomed in on a focus point (0-1 of the image).
+function cover(img, x, y, w, h, zoom = 1, fx = 0.5, fy = 0.5) {
+  if (!img || !img.complete || !img.naturalWidth) { fillR(x, y, w, h, 18, "#050505"); return false; }
+  const iw = img.naturalWidth, ih = img.naturalHeight;
+  const s = Math.max(w / iw, h / ih) * zoom, sw = w / s, sh = h / s;
+  const sx = clamp(fx * iw - sw / 2, 0, iw - sw), sy = clamp(fy * ih - sh / 2, 0, ih - sh);
+  ctx.save(); rrect(x, y, w, h, 18); ctx.clip(); ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h); ctx.restore();
+  return true;
+}
+// A camera feed: the picture in a monitor frame with the camera's label and a REC dot.
+function feed(img, x, y, w, h, { zoom = 1, fx = 0.5, fy = 0.5, cam = null, tag = null, border = "rgba(255,255,255,0.16)" } = {}) {
+  cover(img, x, y, w, h, zoom, fx, fy);
+  ctx.save(); ctx.globalAlpha = 0.08; ctx.fillStyle = "#000"; for (let yy = y; yy < y + h; yy += 4) ctx.fillRect(x, yy, w, 2); ctx.restore();
+  ctx.save(); rrect(x, y, w, h, 18); ctx.strokeStyle = border; ctx.lineWidth = border === "rgba(255,255,255,0.16)" ? 3 : 6; ctx.stroke(); ctx.restore();
+  if (cam) { fillR(x + 20, y + 20, 18, 18, 9, C.alarm); text(cam, x + 50, y + 37, { size: 26, font: F.mono, weight: "700", color: "#f2f2ee", shadow: true }); }
+  if (tag) text(tag, x + w - 20, y + h - 22, { size: 24, font: F.mono, weight: "700", color: "#f2f2ee", align: "right", shadow: true });
+}
+// A burst of static: the look of a camera switch.
+function staticBurst(x, y, w, h, a) {
+  if (a <= 0) return;
+  ctx.save(); ctx.globalAlpha = a; ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+  for (let i = 0; i < 160; i++) { ctx.fillStyle = `rgba(255,255,255,${0.15 + 0.5 * rand(i * 7.3 + a * 91)})`; ctx.fillRect(x + rand(i * 3.1 + a * 13) * w, y + rand(i * 5.7 + a * 17) * h, 30 + 140 * rand(i), 2 + 4 * rand(i + 1)); }
+  ctx.restore();
+}
+function cards(u, d) {
+  if (SP.card) infoCard(SP.card[0], SP.card[1], SP.card[2], appear(u, 0.25));
+  if (SP.stat) statCard(SP.stat[0], SP.stat[1], C[SP.stat[2]] || SP.stat[2] || C.gold, appear(u, 0.6));
+  if (SP.pill) pill(SP.pill, 64, SP.stat ? 452 : 300, appear(u, SP.pillAt != null ? SP.pillAt * d : 0.9));
+}
+const sceneWords = () => ({ kicker: SP.kicker || "", headline: SP.headline || "" });
+
+// A live clip or still, big, with a slow push-in towards a point of interest.
+DRAW.clip = (u, d) => {
+  backdrop(u, { tint: SP.tint || null, light: false });
+  const k = u / d, z = lerp(SP.zoom ? SP.zoom[0] : 1, SP.zoom ? SP.zoom[1] : 1.15, ease(k));
+  const img = SP.clip ? clipImg(SP.clip, lerp(SP.from || 0, SP.to == null ? 1 : SP.to, k)) : stillImg(SP.still);
+  const y0 = SP.stat || SP.pill ? 520 : 420;
+  feed(img, 40, y0, 1000, 1240 - y0, { zoom: z, fx: SP.focus ? SP.focus[0] : 0.5, fy: SP.focus ? SP.focus[1] : 0.5, cam: SP.cam, tag: SP.tag });
+  if (SP.ring) { // point at something in the picture
+    const [rx, ry] = SP.ring, a = appear(u, (SP.ringAt || 0.3) * d);
+    ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = C.gold; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(40 + rx * 1000, y0 + ry * (1240 - y0), 70 + 8 * Math.sin(u * 5), 0, 7); ctx.stroke(); ctx.restore();
+    if (SP.ringLabel) label(SP.ringLabel, 40 + rx * 1000, y0 + ry * (1240 - y0) - 96, C.gold, a, 28);
+  }
+  if (SP.detect) { // what the bot's vision found, as a box over the picture
+    const [bx, by, bw, bh, name] = SP.detect, a = appear(u, (SP.detectAt || 0.25) * d, 0.3);
+    ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = C.go; ctx.lineWidth = 6; ctx.strokeRect(40 + bx * 1000, y0 + by * (1240 - y0), bw * 1000, bh * (1240 - y0));
+    ctx.fillStyle = "rgba(143,220,138,0.10)"; ctx.fillRect(40 + bx * 1000, y0 + by * (1240 - y0), bw * 1000, bh * (1240 - y0)); ctx.restore();
+    label(name, 40 + (bx + bw / 2) * 1000, y0 + by * (1240 - y0) - 16, C.go, a, 28);
+  }
+  cards(u, d);
+  return sceneWords();
+};
+
+// A run of camera feeds, cut with static, each pushing in slowly.
+DRAW.cams = (u, d) => {
+  backdrop(u, { light: false });
+  const list = SP.cams, n = list.length, slot = d / n, i = Math.min(n - 1, Math.floor(u / slot)), lu = u - i * slot;
+  const [still, cam, tag, fx, fy, det] = list[i];
+  feed(stillImg(still), 40, 420, 1000, 820, { zoom: lerp(1.0, 1.18, lu / slot), fx: fx == null ? 0.5 : fx, fy: fy == null ? 0.5 : fy, cam, tag });
+  if (det) { const a = appear(lu, 0.35, 0.25); ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = C.go; ctx.lineWidth = 6; ctx.strokeRect(40 + det[0] * 1000, 420 + det[1] * 820, det[2] * 1000, det[3] * 820); ctx.restore(); label(det[4], 40 + (det[0] + det[2] / 2) * 1000, 420 + det[1] * 820 - 16, C.go, a, 28); }
+  // where this camera is, on a small map of the route
+  if (SP.route) {
+    const r = SP.route, cx = 1040 - r.length * 74;
+    r.forEach((id, j) => { fillR(cx + j * 74, 1180, 66, 40, 8, id === cam.replace("CAM ", "") ? C.gold : "rgba(8,8,9,0.8)"); text(id, cx + j * 74 + 33, 1208, { size: 20, font: F.mono, weight: "700", align: "center", color: id === cam.replace("CAM ", "") ? "#151515" : "#c9cccf" }); });
+  }
+  staticBurst(40, 420, 1000, 820, i > 0 && lu < 0.22 ? 1 - lu / 0.22 : 0);
+  cards(u, d);
+  return sceneWords();
+};
+
+// One animatronic walking its whole route on the map.
+DRAW.route = (u, d) => {
+  backdrop(u, { light: false });
+  const route = SP.route, who = SP.who;
+  const k = clamp((u - 0.6) / Math.max(1, d - 1.6)) * (route.length - 1), i = Math.floor(k), f = ease(k - i);
+  const hl = {}; route.forEach((r, j) => { if (j <= k + 0.5 && ROOMS[r]) hl[r] = C[who]; });
+  floorPlan(hl);
+  const [ax, ay] = roomXY(route[i]), [bx, by] = roomXY(route[Math.min(i + 1, route.length - 1)]);
+  animatronic(who, lerp(ax, bx, f), lerp(ay, by, f) + 48, 0.42, { look: 1 });
+  if (SP.others) for (const [o, r] of SP.others) { const [ox, oy] = roomXY(r); animatronic(o, ox, oy + 48, 0.3, { alpha: 1 - appear(u, 0.4, 1.4) }); }
+  cards(u, d);
+  return sceneWords();
+};
+
+// The die roll on a timer, and the countdown it arms.
+DRAW.roll = (u, d) => {
+  backdrop(u, { tint: SP.tint || null });
+  const who = SP.who, p = SP.period;
+  animatronic(who, 760, 1180, 1.05, { look: Math.sin(u * 0.7) });
+  const ph = (u % p) / p, x = 220, y = 640;
+  ctx.save(); ctx.lineWidth = 16; ctx.strokeStyle = "rgba(255,255,255,0.1)"; ctx.beginPath(); ctx.arc(x, y, 110, 0, 7); ctx.stroke();
+  ctx.strokeStyle = C[who]; ctx.beginPath(); ctx.arc(x, y, 110, -Math.PI / 2, -Math.PI / 2 + ph * Math.PI * 2); ctx.stroke(); ctx.restore();
+  text(p.toFixed(2) + " s", x, y + 14, { size: 40, font: F.mono, weight: "700", align: "center" });
+  const roll = Math.floor(rand(Math.floor(u / p) + 3) * 20) + 1, flash = ph < 0.25;
+  ctx.save(); ctx.translate(x, 900); ctx.rotate(flash ? Math.sin(u * 30) * 0.15 : 0);
+  ctx.fillStyle = "#e9e6dc"; ctx.beginPath(); for (let j = 0; j < 6; j++) { const t = j / 6 * Math.PI * 2 - Math.PI / 2; ctx.lineTo(Math.cos(t) * 86, Math.sin(t) * 86); } ctx.closePath(); ctx.fill(); ctx.restore();
+  text(String(roll), x, 922, { size: 60, font: F.head, weight: "900", color: "#1b1b1b", align: "center" });
+  label(`${roll} <= ${SP.ai || 20}`, x, 1036, C.go, 1, 30);
+  if (SP.countdown) {
+    fillR(64, 1080, 440, 112, 16, "rgba(8,8,9,0.85)");
+    text(SP.countdown[0], 90, 1124, { size: 24, font: F.mono, weight: "700", color: "#c8cbcd" });
+    text(SP.countdown[1], 90, 1170, { size: 30, font: F.mono, weight: "700", color: C.gold });
+  }
+  cards(u, d);
+  return sceneWords();
+};
+
+// "He only moves while you're not looking": the monitor goes up and down; he
+// steps forward only while it is down, and freezes while it is up.
+DRAW.watch = (u, d) => {
+  backdrop(u, { tint: SP.tint || null });
+  const period = 2.2, up = (u % period) < 1.1, stepsDone = Math.floor(u / period) + ((u % period) >= 1.1 ? 0.5 : 0);
+  // the monitor
+  const my = up ? 600 : lerp(600, 1150, clamp(((u % period) - 1.1) / 0.25));
+  fillR(80, my, 440, 300, 22, "#1a1c1e"); fillR(100, my + 20, 400, 230, 10, up ? "#1b2a1f" : "#0e1012");
+  label(up ? "CAMERA UP: HE WAITS" : "CAMERA DOWN", 300, my - 20, up ? C.go : C.alarm, 1, 26);
+  if (up) { animatronic(SP.who, 300, my + 240, 0.4, { look: 1 }); }
+  // him, getting closer each time the monitor is down
+  const x = lerp(1000, 640, clamp(stepsDone / (d / period)));
+  animatronic(SP.who, x, 1180, 0.95, { look: -1, eyesLit: !up });
+  cards(u, d);
+  return sceneWords();
+};
+
+// The corner rule, played out: door open + camera elsewhere -> he walks in.
+DRAW.corner = (u, d) => {
+  backdrop(u, { tint: "#2a1414" });
+  // the right doorway, open, and the office floor
+  ctx.fillStyle = "#24282c"; ctx.fillRect(600, 430, 440, 760); ctx.fillStyle = "#0b0c0d"; ctx.fillRect(640, 470, 360, 720);
+  const enter = 0.62 * d, k = clamp((u - enter) / 1.2);
+  animatronic("freddy", lerp(820, 470, ease(k)), lerp(1170, 1240, ease(k)), lerp(0.9, 1.25, ease(k)), { look: -1, eyesLit: true, alpha: lerp(0.35, 1, k) });
+  // the monitor, on another camera
+  fillR(64, 640, 440, 290, 22, "#1a1c1e"); fillR(84, 660, 400, 220, 10, "#0e1012"); label("CAM 1C", 160, 700, "#8f959a", 1, 22);
+  [["RIGHT DOOR OPEN", 0.15], ["CAMERA NOT ON 4B", 0.35]].forEach(([s, at], i) => { const a = appear(u, at * d); fillR(64, 980 + i * 86, 470, 70, 14, "rgba(8,8,9,0.9)", a); text("✓ " + s, 90, 1026 + i * 86, { size: 28, font: F.mono, weight: "700", color: C.alarm, alpha: a }); });
+  if (k > 0.8) { ctx.save(); ctx.globalAlpha = 0.25 + 0.2 * Math.sin(u * 30); ctx.fillStyle = C.alarm; ctx.fillRect(0, 0, W, 1330); ctx.restore(); label("HE'S IN", 540, 560, "#ffffff", appear(u, enter + 1), 64); }
+  cards(u, d);
+  return sceneWords();
+};
+
+// The bot's answer to Freddy: every camera flip ends on 4B, the right door stays open.
+DRAW.answer = (u, d) => {
+  backdrop(u, { tint: "#152016" });
+  feed(clipImg("freddy4b", (u / d) * 0.9), 64, 520, 600, 338, { zoom: 1.6, fx: 0.47, fy: 0.33, cam: "CAM 4B", border: C.go });
+  label("THE BOT IS WATCHING", 364, 900, C.go, 1, 26);
+  ctx.fillStyle = "#24282c"; ctx.fillRect(720, 520, 300, 660); ctx.fillStyle = "#0b0c0d"; ctx.fillRect(750, 550, 240, 630);
+  label("RIGHT DOOR", 870, 500, "#cfd2d4", 1, 22); label("OPEN", 870, 880, C.go, 1, 40); label("no power spent", 870, 924, C.muted, 1, 22);
+  cards(u, d);
+  return sceneWords();
+};
+
+// The end card: the whole idea, in a few checked lines.
+DRAW.recap = (u, d) => {
+  backdrop(u, { tint: SP.tint || null });
+  if (SP.who) animatronic(SP.who, 840, 1180, 0.8, { look: -1 });
+  fillR(40, 440, SP.who ? 700 : 1000, 120 + SP.items.length * 104, 22, "rgba(8,8,9,0.72)");
+  text(SP.title || "IN SHORT", 74, 500, { size: 30, font: F.mono, weight: "700", color: C.gold, spacing: 6 });
+  SP.items.forEach((s, i) => {
+    const a = appear(u, 0.5 + i * (d * 0.55 / SP.items.length), 0.35);
+    ctx.save(); ctx.globalAlpha = a; ctx.translate((1 - a) * -30, 0);
+    fillR(74, 538 + i * 104, 52, 52, 14, C.go); text("✓", 100, 576 + i * 104, { size: 34, font: F.head, weight: "900", color: "#151515", align: "center" });
+    wrapLines(s, SP.who ? 560 : 840, 34, "800").slice(0, 2).forEach((l, j) => text(l, 146, 570 + i * 104 + j * 38, { size: 34, font: F.head, weight: "800" }));
+    ctx.restore();
+  });
+  cards(u, d);
+  return sceneWords();
+};
+
+// Foxy's lock: while a camera is up it is re-rolled ten times a second.
+DRAW.lock = (u, d) => {
+  backdrop(u, { tint: "#231a2c" });
+  feed(stillImg(SP.still || "1C_s1"), 64, 520, 952, 536, { zoom: lerp(1, 1.12, u / d), fx: 0.6, fy: 0.5, cam: "CAM 1C" });
+  const camUp = (u % 2.4) < 1.3, n = camUp ? 50 + Math.floor(rand(Math.floor(u * 10)) * 1000) : Math.max(50, 50 + Math.floor(rand(Math.floor((u - (u % 2.4) + 1.3) * 10)) * 1000) - Math.floor(((u % 2.4) - 1.3) * 60));
+  fillR(64, 1090, 952, 120, 18, "rgba(8,8,9,0.85)");
+  text(camUp ? "CAMERA UP: RE-ROLLED" : "CAMERA DOWN: COUNTING DOWN", 92, 1136, { size: 26, font: F.mono, weight: "700", color: camUp ? C.go : C.alarm });
+  fillR(92, 1158, 860 * Math.min(1, n / 1050), 26, 8, camUp ? C.go : C.gold);
+  text(n + " frames", 990, 1136, { size: 26, font: F.mono, weight: "700", align: "right" });
+  cards(u, d);
+  return sceneWords();
+};
+
+// Looking at the cove pauses his timer.
+DRAW.pause = (u, d) => {
+  backdrop(u, { tint: "#231a2c" });
+  const holdFrom = 0.25 * d, holdTo = holdFrom + Math.min(2.56 * 1.4, d * 0.4), holding = u > holdFrom && u < holdTo;
+  feed(stillImg(holding ? "1C_s2" : "1C_s1"), 64, 520, 600, 338, { cam: "CAM 1C", border: holding ? C.gold : "rgba(255,255,255,0.16)" });
+  // his timer ring, frozen while the cove is on screen
+  const t = u < holdFrom ? u : u < holdTo ? holdFrom : u - (holdTo - holdFrom), ph = (t % 5.01) / 5.01;
+  ctx.save(); ctx.lineWidth = 16; ctx.strokeStyle = "rgba(255,255,255,0.1)"; ctx.beginPath(); ctx.arc(860, 690, 110, 0, 7); ctx.stroke();
+  ctx.strokeStyle = holding ? C.gold : C.foxy; ctx.beginPath(); ctx.arc(860, 690, 110, -Math.PI / 2, -Math.PI / 2 + ph * Math.PI * 2); ctx.stroke(); ctx.restore();
+  text(holding ? "PAUSED" : "5.01 s", 860, 704, { size: holding ? 34 : 40, font: F.mono, weight: "700", align: "center", color: holding ? C.gold : C.paper });
+  fillR(64, 920, 952, 230, 18, "rgba(8,8,9,0.85)");
+  text("HELD THE COVE", 92, 980, { size: 28, font: F.mono, weight: "700", color: "#c8cbcd" }); text("2.56 s", 600, 980, { size: 28, font: F.mono, weight: "700", color: C.gold, align: "right" });
+  text("HIS TICKS MOVED", 92, 1040, { size: 28, font: F.mono, weight: "700", color: "#c8cbcd", alpha: appear(u, holdTo) }); text("+2.54 s", 600, 1040, { size: 28, font: F.mono, weight: "700", color: C.gold, align: "right", alpha: appear(u, holdTo) });
+  text("measured live", 92, 1110, { size: 24, font: F.mono, weight: "500", color: C.muted, alpha: appear(u, holdTo) });
+  cards(u, d);
+  return sceneWords();
+};
+
+// Foxy reaches the door: the bangs and what they cost.
+DRAW.bangs = (u, d) => {
+  hall();
+  const k = clamp(u / 1.4);
+  animatronic("foxy", 540 + Math.sin(u * 20) * 6 * (1 - k), lerp(800, 1180, ease(k)), lerp(0.3, 1.0, ease(k)), { eyesLit: true });
+  const bangs = [1.6, 2.6, 3.6].map(b => Math.min(b, d - 1.2));
+  if (k >= 1) {
+    const shake = bangs.reduce((s, b) => s + (u > b && u < b + 0.25 ? Math.sin((u - b) * 90) * (1 - (u - b) / 0.25) * 16 : 0), 0);
+    ctx.save(); ctx.translate(shake, 0); ctx.fillStyle = "#4d5257"; ctx.fillRect(250, 430, 580, 760);
+    for (let i = 0; i < 9; i++) { ctx.fillStyle = i % 2 ? "#e0b12c" : "#222"; ctx.beginPath(); ctx.moveTo(250 + i * 66, 1130); ctx.lineTo(316 + i * 66, 1130); ctx.lineTo(282 + i * 66, 1190); ctx.lineTo(216 + i * 66, 1190); ctx.fill(); }
+    ctx.restore();
+    bangs.forEach((b, i) => { if (u > b) text(["-1%", "-6%", "-11%"][i], 540, 720 + i * 150, { size: 120, font: F.head, weight: "900", color: C.alarm, align: "center", alpha: appear(u, b, 0.15) }); });
+  }
+  cards(u, d);
+  return sceneWords();
+};
+
+// The bot's answer to Foxy: a camera flip just before each of his ticks.
+DRAW.flips = (u, d) => {
+  backdrop(u, { light: false });
+  const x0 = 64, x1 = 1016, span = 12, px = (x1 - x0) / span, left = u * 0.6;
+  const tx = s => x0 + (s - left) * px;
+  fillR(40, 520, 1000, 520, 22, "rgba(8,8,9,0.6)");
+  text("FOXY'S TICKS", 64, 590, { size: 26, font: F.mono, weight: "700", color: C.foxy });
+  text("CAMERA FLIPS", 64, 790, { size: 26, font: F.mono, weight: "700", color: C.go });
+  ctx.save(); ctx.beginPath(); ctx.rect(x0, 600, x1 - x0, 420); ctx.clip();
+  for (let kk = Math.floor(left / 5.01) - 1; kk < (left + span) / 5.01 + 1; kk++) {
+    const t = kk * 5.01 + 2;
+    fillR(tx(t) - 6, 620, 12, 90, 6, C.foxy);
+    fillR(tx(t - 0.45), 810, 0.6 * px, 90, 10, "rgba(143,220,138,0.85)");
+    text("LOCKED", tx(t - 0.45) + 6, 960, { size: 22, font: F.mono, weight: "700", color: C.go });
+  }
+  ctx.restore();
+  cards(u, d);
+  return sceneWords();
+};
+
+// The 2023 bot's code, with one of its flaws lit.
+DRAW.code = (u, d) => {
+  backdrop(u, { tint: "#2b2316" });
+  fillR(110, 470, 860, 600, 26, "#1c1d1f"); fillR(144, 500, 792, 480, 12, "#0f1411");
+  const code = [["pyautogui.PAUSE = 1", 0], ["", -1], ["def left_light(self):", -1], ["  moveTo(56, 446, 0.5)", -1], ["  time.sleep(1)", 0], ["  leftClick()", -1], ["", -1], ["locate(img, confidence=0.6)", 2], ["", -1], ["left_light(); left_door()", 1], ["right_light(); right_door()", 1], ["# ...the script ends", 1]];
+  code.forEach(([line, f], i) => {
+    const lit = f === SP.flaw;
+    if (lit) fillR(156, 512 + i * 38, 768, 34, 6, f === 1 ? "rgba(255,91,77,0.25)" : "rgba(242,195,58,0.25)", appear(u, 0.4));
+    text(line, 174, 540 + i * 38, { size: 27, font: F.mono, weight: "500", color: lit ? "#f3f3ee" : "#8aa08e" });
+  });
+  if (SP.flaw === 0) { const m = Math.sin(u * Math.PI); ctx.save(); ctx.translate(930, 1180); ctx.fillStyle = "#3a2e22"; ctx.beginPath(); ctx.moveTo(-46, 0); ctx.lineTo(46, 0); ctx.lineTo(18, -170); ctx.lineTo(-18, -170); ctx.fill(); ctx.rotate(m * 0.5); ctx.fillStyle = "#c9b48a"; ctx.fillRect(-4, -190, 8, 190); ctx.fillStyle = C.gold; ctx.fillRect(-14, -150, 28, 22); ctx.restore(); }
+  if (SP.flaw === 1) { const k = appear(u, 0.6, d * 0.6); animatronic("bonnie", lerp(-120, 160, k), 1230, 0.66, { look: 1, glowColor: k > 0.95 ? "rgba(255,91,77,0.35)" : null }); }
+  cards(u, d);
+  return sceneWords();
+};
+
+// ---- the office at night: a set for the shorts, with the guard in it.
+// Everything here draws in art space (1080 x 1330); the floor is at y 1180.
+
+// Creepiness: a light that flickers, a heavier vignette, grain.
+function flickerAt(u, seed = 1) {
+  const f = Math.sin(u * 13.1 + seed) * Math.sin(u * 7.7 + seed * 3) * Math.sin(u * 3.3);
+  return f > 0.82 ? 0.35 : f > 0.7 ? 0.7 : 1;
+}
+function creep(u, strength = 1) {
+  const v = ctx.createRadialGradient(W / 2, 760, 220, W / 2, 760, 980);
+  v.addColorStop(0, "rgba(0,0,0,0)"); v.addColorStop(1, `rgba(0,0,0,${0.55 * strength})`);
+  ctx.fillStyle = v; ctx.fillRect(0, 0, W, 1330);
+  ctx.save(); ctx.globalAlpha = 0.05 * strength;
+  for (let i = 0; i < 220; i++) { ctx.fillStyle = rand(i + Math.floor(u * 24) * 7.1) > 0.5 ? "#fff" : "#000"; ctx.fillRect(rand(i * 2.3 + Math.floor(u * 24)) * W, rand(i * 4.1 + Math.floor(u * 24) * 3) * 1330, 3, 3); }
+  ctx.restore();
+}
+function shake(u, at, len = 0.5, amount = 22) {
+  if (u < at || u > at + len) return;
+  const k = 1 - (u - at) / len;
+  ctx.translate(Math.sin(u * 95) * amount * k, Math.cos(u * 83) * amount * k * 0.6);
+}
+function redFlash(u, at, len = 0.6) {
+  if (u < at || u > at + len) return;
+  ctx.save(); ctx.globalAlpha = 0.55 * (1 - (u - at) / len); ctx.fillStyle = C.alarm; ctx.fillRect(0, 0, W, 1330); ctx.restore();
+}
+
+// The guard (or the bot, as a little robot), sitting behind the desk.
+// pose: look (-1 left .. 1 right), tablet (0 down .. 1 up in front of the face),
+// fear (0 .. 1: wide eyes, trembling), press (-1 left button, 1 right button, 0 none),
+// blind (a blindfold), robot (the bot).
+function guardAt(x, y, u, { look = 0, tablet = 0, fear = 0, press = 0, blind = false, robot = false, screen = null } = {}) {
+  ctx.save(); ctx.translate(x + (fear > 0.5 ? Math.sin(u * 60) * 2 : 0), y + Math.sin(u * 2) * 2);
+  // chair back
+  ctx.fillStyle = "#1b1d20"; rrect(-90, -170, 180, 210, 30); ctx.fill();
+  // body
+  ctx.fillStyle = robot ? "#3c4247" : "#5b6f87"; rrect(-70, -150, 140, 170, 34); ctx.fill();
+  if (!robot) { ctx.fillStyle = "#e3c45a"; ctx.beginPath(); ctx.arc(-32, -110, 9, 0, 7); ctx.fill(); }
+  // arms: reaching for a door button, or holding the tablet
+  ctx.fillStyle = robot ? "#2c3136" : "#4c5e74";
+  if (press) { ctx.save(); ctx.rotate(press * 1.1); rrect(-14, -130, 28, 150, 14); ctx.fill(); ctx.restore(); }
+  // head
+  const hy = -210 - tablet * 6, hx = look * 22;
+  if (robot) {
+    ctx.fillStyle = "#2a2f33"; rrect(hx - 62, hy - 56, 124, 104, 18); ctx.fill();
+    ctx.fillStyle = "#0e1a12"; rrect(hx - 50, hy - 44, 100, 80, 10); ctx.fill();
+    glow(hx + look * 18, hy - 4, 50, "rgba(143,220,138,0.45)", 1);
+    ctx.fillStyle = C.go; ctx.beginPath(); ctx.arc(hx + look * 18, hy - 4, 13, 0, 7); ctx.fill();
+    ctx.fillStyle = "#2a2f33"; ctx.fillRect(hx - 4, hy - 82, 8, 28); ctx.fillStyle = C.alarm; ctx.beginPath(); ctx.arc(hx, hy - 86, 8, 0, 7); ctx.fill();
+  } else {
+    ctx.fillStyle = "#e0b896"; ctx.beginPath(); ctx.arc(hx, hy, 54, 0, 7); ctx.fill();
+    ctx.fillStyle = "#1d2a3d"; ctx.beginPath(); ctx.arc(hx, hy - 14, 56, Math.PI, 0); ctx.fill(); ctx.fillRect(hx - 64, hy - 18, 128, 12);
+    if (blind) { ctx.fillStyle = "#111"; ctx.fillRect(hx - 56, hy - 6, 112, 26); }
+    else {
+      const r = 6 + fear * 6;
+      for (const s of [-1, 1]) { ctx.fillStyle = "#fbfbf7"; ctx.beginPath(); ctx.arc(hx + s * 20 + look * 10, hy + 6, r, 0, 7); ctx.fill(); ctx.fillStyle = "#111"; ctx.beginPath(); ctx.arc(hx + s * 20 + look * 14, hy + 7, 3.5, 0, 7); ctx.fill(); }
+      if (fear > 0.6) { ctx.fillStyle = "#111"; ctx.beginPath(); ctx.ellipse(hx + look * 10, hy + 34, 9, 12, 0, 0, 7); ctx.fill(); }
+    }
+  }
+  // the tablet, raised in front of the face; its glow lights the face
+  if (tablet > 0.02) {
+    const ty = lerp(-60, hy + 40, tablet);
+    ctx.save(); ctx.translate(look * 10, ty);
+    fillR(-110, -78, 220, 150, 14, "#121416");
+    fillR(-98, -66, 196, 126, 8, screen || "#1b3226");
+    ctx.restore();
+    glow(hx, hy, 160, `rgba(120,190,255,${0.25 * tablet})`, 1);
+  }
+  ctx.restore();
+}
+
+// The office: back wall, poster, ceiling lamp (flickering), both doorways with
+// their doors and buttons, the desk and the fan. Returns the light level.
+function office(u, { left = 0, right = 0, dark = 0.35, flick = true, seed = 1, leftLit = false, rightLit = false } = {}) {
+  const light = flick ? flickerAt(u, seed) : 1;
+  ctx.fillStyle = "#2a2d31"; ctx.fillRect(0, 0, W, 1330);
+  ctx.fillStyle = "#33373c"; ctx.fillRect(0, 0, W, 300);
+  // the poster
+  fillR(380, 380, 320, 200, 8, "#5a1f1f"); text("CELEBRATE!", 540, 430, { size: 40, font: F.head, weight: "900", align: "center", color: "#f0d65a" });
+  for (const [i, w] of ["bonnie", "freddy", "chica"].entries()) animatronic(w, 450 + i * 90, 575, 0.36, { alpha: 0.85 });
+  // doorways
+  for (const [x, side, k, lit] of [[40, "L", left, leftLit], [860, "R", right, rightLit]]) {
+    ctx.fillStyle = "#1a1c1f"; ctx.fillRect(x - 20, 330, 220, 870);
+    ctx.fillStyle = lit ? "#4c463a" : "#060607"; ctx.fillRect(x, 350, 180, 830);
+    if (lit) glow(x + 90, 450, 240, "rgba(255,236,170,0.22)", 1);
+    if (k > 0) {
+      ctx.fillStyle = "#4d5257"; ctx.fillRect(x, 350, 180, 830 * k);
+      for (let i = 0; i < 4; i++) { ctx.fillStyle = i % 2 ? "#e0b12c" : "#222"; ctx.beginPath(); const yy = 350 + 830 * k; ctx.moveTo(x + i * 48, yy - 40); ctx.lineTo(x + i * 48 + 48, yy - 40); ctx.lineTo(x + i * 48 + 28, yy); ctx.lineTo(x + i * 48 - 20, yy); ctx.fill(); }
+    }
+    const bx = side === "L" ? x + 200 : x - 64;
+    fillR(bx, 640, 44, 130, 8, "#16181a"); fillR(bx + 8, 652, 28, 46, 5, k > 0.5 ? C.alarm : "#7a2b25"); fillR(bx + 8, 710, 28, 46, 5, lit ? "#f4f2ea" : "#4a4f54");
+  }
+  // floor
+  ctx.fillStyle = "#1c1e21"; ctx.fillRect(0, 1180, W, 150);
+  for (let i = 0; i < 14; i++) { ctx.fillStyle = i % 2 ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.15)"; ctx.fillRect(i * 80, 1180, 80, 150); }
+  return light;
+}
+function desk(u) {
+  fillR(240, 1000, 600, 46, 8, "#3a2f26"); ctx.fillStyle = "#2a221b"; ctx.fillRect(270, 1046, 30, 134); ctx.fillRect(780, 1046, 30, 134);
+  // the fan
+  ctx.save(); ctx.translate(330, 930); fillR(-8, 0, 16, 70, 4, "#2a2d31"); ctx.beginPath(); ctx.arc(0, 0, 54, 0, 7); ctx.fillStyle = "#3a3e43"; ctx.fill();
+  for (let i = 0; i < 3; i++) { ctx.save(); ctx.rotate(u * 18 + i * 2.09); ctx.fillStyle = "#5c6166"; ctx.beginPath(); ctx.ellipse(0, -26, 12, 26, 0, 0, 7); ctx.fill(); ctx.restore(); }
+  ctx.restore();
+  fillR(640, 960, 120, 40, 6, "#cfd2d4"); fillR(700, 940, 40, 24, 4, "#cfd2d4");
+}
+function lamp(u, light) {
+  ctx.fillStyle = "#151617"; ctx.fillRect(536, 0, 8, 110);
+  ctx.fillStyle = "#3a3e43"; ctx.beginPath(); ctx.moveTo(490, 150); ctx.lineTo(590, 150); ctx.lineTo(560, 110); ctx.lineTo(520, 110); ctx.fill();
+  ctx.save(); ctx.globalAlpha = 0.16 * light; ctx.fillStyle = "#fff3cf"; ctx.beginPath(); ctx.moveTo(500, 150); ctx.lineTo(580, 150); ctx.lineTo(820, 1180); ctx.lineTo(260, 1180); ctx.fill(); ctx.restore();
+}
+// Dim the whole room when the lamp flickers.
+function dimRoom(light, base = 0.3) { ctx.save(); ctx.globalAlpha = base + (1 - light) * 0.5; ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, 1330); ctx.restore(); }
+
+// Freddy sneaks in: the guard checks another camera with the right door open.
+DRAW.sneak = (u, d) => {
+  const raise = appear(u, 0.4, 0.5), lower = appear(u, d * 0.72, 0.4);
+  const tablet = raise * (1 - lower), creepK = clamp((u - d * 0.25) / (d * 0.45));
+  ctx.save(); shake(u, d * 0.78, 0.6, 30);
+  const light = office(u, { seed: 4 });
+  lamp(u, light);
+  // Freddy: eyes in the right doorway, then creeping in behind the tablet
+  const fx = lerp(950, 690, ease(creepK)), fs = lerp(0.7, 1.2, ease(creepK));
+  animatronic("freddy", fx, 1190, fs, { look: -1, eyesLit: true, alpha: lerp(0.25, 1, creepK) });
+  desk(u);
+  guardAt(500, 1000, u, { look: tablet > 0.5 ? 0 : 0.9, tablet, fear: lower, screen: "#1d2742" });
+  if (tablet > 0.5) label("CAM 1C", 500, 770, "#9fb7ff", tablet, 22);
+  dimRoom(light, lerp(0.25, 0.45, creepK));
+  // the jumpscare: his face fills the frame
+  if (u > d * 0.78) {
+    const j = appear(u, d * 0.78, 0.18);
+    ctx.save(); ctx.globalAlpha = j; ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, 1330); ctx.restore();
+    animatronic("freddy", 540, 1900, 3.4 * (0.9 + 0.1 * j), { eyesLit: true, alpha: j });
+  }
+  ctx.restore();
+  redFlash(u, d * 0.78, 0.7);
+  cards(u, d);
+  if (u > d * 0.84) label("HE'S IN", 540, 640, "#ffffff", appear(u, d * 0.84), 90);
+  return sceneWords();
+};
+
+// Watching slows him down the whole way: two Freddys race from the stage to
+// 4B. One is never watched; the other only gets the ticks that land while the
+// monitor is down.
+DRAW.slowpath = (u, d) => {
+  backdrop(u, { tint: "#2a1d12", light: false });
+  const rooms = ["1A", "1B", "7", "6", "4A", "4B"];
+  const lanes = [{ y: 560, name: "NOBODY WATCHING", watched: false }, { y: 870, name: "MONITOR UP, ON HIM", watched: true }];
+  const tick = 3.02 * 0.45;                                 // his ticks, sped up for the picture
+  lanes.forEach(L => {
+    fillR(40, L.y - 70, 1000, 250, 22, "rgba(8,8,9,0.6)");
+    text(L.name, 1010, L.y - 30, { size: 26, font: F.mono, weight: "700", color: L.watched ? C.go : C.alarm, align: "right" });
+    rooms.forEach((r, i) => { fillR(70 + i * 160, L.y + 10, 130, 60, 12, "#24282c"); text(r, 135 + i * 160, L.y + 50, { size: 24, font: F.mono, weight: "700", align: "center", color: "#c9cccf" }); });
+    // ticks he could use: all of them, or only those while the monitor is down
+    let steps = 0;
+    for (let t = tick; t <= u; t += tick) { const up = L.watched && ((t / 2.6) % 1) < 0.78; if (!up) steps++; }
+    steps = Math.min(5, steps);
+    const prog = Math.min(5, steps + (steps < 5 ? clamp(((u % tick) / tick) * 0.0) : 0));
+    animatronic("freddy", 135 + prog * 160, L.y + 6, 0.22, { look: 1, eyesLit: L.watched && ((u / 2.6) % 1) < 0.78 });
+    if (L.watched) { const up = ((u / 2.6) % 1) < 0.78; label(up ? "MONITOR UP: HE WAITS" : "monitor down: one step", 540, L.y + 140, up ? C.go : C.muted, 1, 24); }
+    if (steps >= 5) label("AT 4B", 900, L.y + 140, C.alarm, 1, 26);
+  });
+  cards(u, d);
+  return sceneWords();
+};
+
+// The bot's answer: it stares at 4B; Freddy stands in the right doorway, frozen.
+DRAW.guardwatch = (u, d) => {
+  const light = office(u, { seed: 2 });
+  lamp(u, light);
+  animatronic("freddy", 950, 1190, 0.75, { look: -1, eyesLit: true, alpha: 0.35 + 0.1 * Math.sin(u * 2) });
+  desk(u);
+  guardAt(520, 1060, u, { robot: true, tablet: 0.35, look: 0.4, screen: "#13261a" });
+  dimRoom(light, 0.3);
+  // what the tablet shows: the live 4B view
+  feed(clipImg("freddy4b", (u / d) * 0.8), 300, 420, 480, 270, { zoom: 1.5, fx: 0.47, fy: 0.33, cam: "CAM 4B", border: C.go });
+  label("THE BOT IS WATCHING", 540, 730, C.go, 1, 26);
+  label("RIGHT DOOR OPEN: NO POWER SPENT", 540, 1260, C.go, appear(u, d * 0.4), 24);
+  cards(u, d);
+  return sceneWords();
+};
+
+// Foxy's run, from the office: footsteps, the guard slams the left door, the bangs.
+DRAW.foxyoffice = (u, d) => {
+  const slamAt = d * 0.32, bangs = [d * 0.45, d * 0.6, d * 0.75];
+  ctx.save(); bangs.forEach(b => shake(u, b, 0.35, 18));
+  const left = appear(u, slamAt, 0.25);
+  const light = office(u, { left, seed: 7 });
+  lamp(u, light);
+  // Foxy, running in from the dark left hall until the door drops
+  if (left < 1) animatronic("foxy", lerp(-160, 110, ease(clamp(u / slamAt))), 1190, 1.0, { eyesLit: true, look: 1, alpha: 0.9 });
+  desk(u);
+  guardAt(520, 1000, u, { look: -1, fear: u < slamAt + 0.5 ? 1 : 0.4, press: u > slamAt - 0.3 && u < slamAt + 0.4 ? -1 : 0 });
+  dimRoom(light, 0.32);
+  ctx.restore();
+  bangs.forEach((b, i) => { if (u > b) text(["BANG -1%", "BANG -6%", "BANG -11%"][i], 220, 700 + i * 110, { size: 70, font: F.head, weight: "900", color: C.alarm, alpha: appear(u, b, 0.12) * (u < b + 0.8 ? 1 : 0.5) }); });
+  cards(u, d);
+  return sceneWords();
+};
+
+// The 2023 bot as a guard: blindfolded, pressing the same buttons to a
+// metronome, while Bonnie walks in through the open left door.
+DRAW.blind = (u, d) => {
+  const beat = 1.0, phase = Math.floor(u / beat) % 4;
+  ctx.save(); shake(u, d * 0.82, 0.6, 28);
+  const light = office(u, { left: 0, seed: 3, leftLit: phase === 0 });
+  lamp(u, light);
+  const k = clamp((u - d * 0.2) / (d * 0.6));
+  animatronic("bonnie", lerp(-40, 330, ease(k)), 1190, lerp(0.8, 1.15, k), { look: 1, eyesLit: true, alpha: lerp(0.4, 1, k) });
+  desk(u);
+  guardAt(560, 1000, u, { blind: true, press: phase === 0 ? -1 : phase === 2 ? 1 : 0, tablet: phase === 1 ? 1 : 0 });
+  dimRoom(light, 0.28);
+  // the metronome
+  ctx.save(); ctx.translate(780, 1000); ctx.fillStyle = "#3a2e22"; ctx.beginPath(); ctx.moveTo(-34, 0); ctx.lineTo(34, 0); ctx.lineTo(13, -120); ctx.lineTo(-13, -120); ctx.fill();
+  ctx.rotate(Math.sin(u * Math.PI / beat) * 0.5); ctx.fillStyle = "#c9b48a"; ctx.fillRect(-3, -135, 6, 135); ctx.restore();
+  label(["LIGHT", "CAMERA", "DOOR", "WAIT"][phase], 780, 860, C.gold, 1, 26);
+  if (u > d * 0.82) { const j = appear(u, d * 0.82, 0.15); ctx.save(); ctx.globalAlpha = j; ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, 1330); ctx.restore(); animatronic("bonnie", 540, 1900, 3.2, { eyesLit: true, alpha: j }); }
+  ctx.restore();
+  redFlash(u, d * 0.82, 0.7);
+  cards(u, d);
+  return sceneWords();
+};
+
+// A whole night in seconds: the clock runs, the power drains, they come to the
+// doors and the robot shuts them in time.
+DRAW.night = (u, d) => {
+  const k = u / d, hour = Math.min(6, Math.floor(k * 6.5));
+  const events = [[0.18, "L", "bonnie"], [0.34, "R", "chica"], [0.52, "L", "bonnie"], [0.66, "R", "freddy"], [0.8, "L", "foxy"]];
+  let left = 0, right = 0, lu = null;
+  events.forEach(([at, side, who]) => {
+    const s = (k - at) * d;
+    if (s > 0 && s < 1.6) { const shut = s > 0.45 && s < 1.4 ? 1 : 0; if (side === "L") { left = shut; lu = [who, s, "L"]; } else { right = shut; lu = [who, s, "R"]; } }
+  });
+  const light = office(u, { left, right, seed: 5, leftLit: lu && lu[2] === "L" && lu[1] < 0.5, rightLit: lu && lu[2] === "R" && lu[1] < 0.5 });
+  lamp(u, light);
+  if (lu) animatronic(lu[0], lu[2] === "L" ? 130 : 950, 1190, 0.8, { eyesLit: true, alpha: 0.85, look: lu[2] === "L" ? 1 : -1 });
+  desk(u);
+  guardAt(520, 1000, u, { robot: true, look: lu ? (lu[2] === "L" ? -1 : 1) : Math.sin(u), tablet: ((u * 0.8) % 1) < 0.3 ? 1 : 0, press: lu && lu[1] > 0.3 && lu[1] < 0.6 ? (lu[2] === "L" ? -1 : 1) : 0 });
+  dimRoom(light, 0.3);
+  // the clock and the battery
+  fillR(64, 300, 300, 150, 18, "rgba(8,8,9,0.82)");
+  text(hour >= 6 ? "6 AM" : `${hour === 0 ? 12 : hour} AM`, 92, 400, { size: 80, font: F.head, weight: "900", color: hour >= 6 ? C.go : C.paper });
+  const power = Math.max(4, Math.round(99 - k * 92));
+  text(`${power}%`, 344, 400, { size: 40, font: F.mono, weight: "700", color: power < 20 ? C.alarm : C.gold, align: "right" });
+  if (hour >= 6) { glow(540, 700, 500, "rgba(143,220,138,0.25)", 1); label("6 AM", 540, 760, "#ffffff", appear(u, d * 0.93, 0.3), 120); }
+  cards(u, d);
+  return sceneWords();
+};
+
 // ---------------------------------------------------------------- frame
+// ---- human vs robot: the same office twice, side by side.
+// SP.mode picks the comparison: intro, power, freddy, timing, foxy, result.
+function miniOffice(u, x0, opts, inner) {
+  ctx.save(); ctx.translate(x0, 380); ctx.scale(0.5, 0.5);
+  ctx.beginPath(); ctx.rect(0, 0, 1080, 1200); ctx.clip();
+  const light = office(u, opts);
+  lamp(u, light);
+  inner(light);
+  ctx.restore();
+}
+function powerBar(x, y, w, pct, label, color) {
+  fillR(x, y, w, 46, 12, "rgba(8,8,9,0.85)");
+  fillR(x + 6, y + 6, Math.max(0, (w - 12) * pct / 100), 34, 8, color);
+  text(label, x + w / 2, y + 33, { size: 24, font: F.mono, weight: "700", align: "center", color: "#ffffff", shadow: true });
+}
+DRAW.versus = (u, d) => {
+  backdrop(u, { light: false });
+  const mode = SP.mode || "intro", k = u / d;
+  let humanPower = 99, robotPower = 99, humanDead = false;
+  const H = { left: 0, right: 0, leftLit: false, rightLit: false, seed: 2 }, R = { left: 0, right: 0, seed: 6 };
+  let hPose = { look: Math.sin(u * 1.7), fear: 0.6 }, rPose = { robot: true, look: Math.sin(u * 0.9) * 0.6 };
+  let hIntruder = null, rIntruder = null, hJump = -1;
+  if (mode === "intro") { humanPower = 99 - k * 8; robotPower = 99 - k * 4; H.leftLit = ((u * 1.3) % 1) < 0.5; }
+  if (mode === "power") {
+    H.left = 1; H.right = k > 0.3 ? 1 : 0; H.leftLit = true; H.rightLit = k > 0.5;
+    humanPower = Math.max(0, 99 - k * 120); humanDead = humanPower <= 0;
+    R.left = ((u % 5) > 3.2 && (u % 5) < 3.9) ? 1 : 0; R.leftLit = ((u % 1) > 0.4 && (u % 1) < 0.55);
+    robotPower = 99 - k * 22;
+    rPose.press = R.left ? -1 : 0;
+  }
+  if (mode === "freddy") {
+    hPose = { tablet: k < 0.75 ? 1 : 0, look: 0, fear: k > 0.75 ? 1 : 0.3, screen: "#1d2742" };
+    hIntruder = ["freddy", lerp(950, 690, ease(clamp((k - 0.2) / 0.5))), 0.7 + 0.5 * clamp((k - 0.2) / 0.5)];
+    hJump = d * 0.78;
+    rPose = { robot: true, tablet: (u % 2.4) < 0.9 ? 0.8 : 0, look: 0.4, screen: "#13261a" };
+    rIntruder = ["freddy", 960, 0.7];
+  }
+  if (mode === "foxy") {
+    hPose = { look: 1, fear: k > 0.55 ? 1 : 0.3 };
+    hIntruder = ["foxy", lerp(-160, 110, ease(clamp((k - 0.35) / 0.25))), 1.0];
+    hJump = d * 0.62;
+    rPose = { robot: true, tablet: (u % 2.0) < 0.5 ? 0.8 : 0, look: -0.3, screen: "#231a2c" };
+  }
+  if (mode === "result") {
+    humanPower = Math.max(0, 9 - k * 20); humanDead = k > 0.3; robotPower = 11;
+    rPose = { robot: true, look: 0 };
+  }
+  // the human
+  miniOffice(u, 0, H, light => {
+    if (hIntruder) animatronic(hIntruder[0], hIntruder[1], 1190, hIntruder[2], { eyesLit: true, look: -1, alpha: 0.9 });
+    desk(u);
+    guardAt(520, 1000, u, hPose);
+    dimRoom(light, humanDead ? 0.85 : 0.3);
+    if (humanDead) { animatronic("freddy", 130, 1190, 0.9, { eyesLit: Math.sin(u * 9) > 0 }); }
+    if (hJump > 0 && u > hJump) { const j = appear(u, hJump, 0.15); ctx.save(); ctx.globalAlpha = j; ctx.fillStyle = "#000"; ctx.fillRect(0, 0, 1080, 1330); ctx.restore(); animatronic(hIntruder[0], 540, 1900, 3.2, { eyesLit: true, alpha: j }); }
+  });
+  // the robot
+  miniOffice(u, 540, R, light => {
+    if (rIntruder) animatronic(rIntruder[0], rIntruder[1], 1190, rIntruder[2], { eyesLit: true, look: -1, alpha: 0.4 });
+    desk(u);
+    guardAt(520, 1000, u, rPose);
+    dimRoom(light, 0.25);
+    if (mode === "result") { glow(540, 600, 500, "rgba(143,220,138,0.25)", 1); label("6 AM", 540, 640, "#ffffff", appear(u, d * 0.3), 150); }
+  });
+  ctx.fillStyle = "#0b0c0d"; ctx.fillRect(536, 380, 8, 600);
+  pill("HUMAN", 20, 396, 1); ctx.save(); ctx.translate(560, 0); pill("ROBOT", 0, 396, 1); ctx.restore();
+  if (hJump > 0 && u > hJump && u < hJump + 0.6) { ctx.save(); ctx.globalAlpha = 0.5 * (1 - (u - hJump) / 0.6); ctx.fillStyle = C.alarm; ctx.fillRect(0, 380, 540, 600); ctx.restore(); }
+  if (humanDead && mode !== "result") label("OUT OF POWER", 270, 700, C.alarm, 1, 40);
+  if (mode === "result") label(humanDead ? "4 AM: BLACKOUT" : "", 270, 700, C.alarm, appear(u, d * 0.3), 40);
+  // under each office: power, and a line on what it is doing
+  powerBar(20, 994, 500, humanPower, `POWER ${Math.round(humanPower)}%`, humanPower < 20 ? C.alarm : C.gold);
+  powerBar(560, 994, 500, robotPower, `POWER ${Math.round(robotPower)}%`, C.go);
+  const lines = {
+    intro: ["guesses", "knows every rule"], power: ["doors shut, lights on", "shut just in time"], freddy: ["looks away", "ends every flip on 4B"],
+    timing: ["reacts", "frame-perfect"], foxy: ["forgets Foxy", "flips before his ticks"], result: ["blackout at 4 AM", "6 AM, 11% left"],
+  }[mode];
+  label(lines[0], 270, 1080, C.alarm, 1, 28); label(lines[1], 810, 1080, C.go, 1, 28);
+  if (mode === "timing") {
+    // clicks against the frame they were meant for (60 frames a second)
+    fillR(20, 1104, 1040, 170, 16, "rgba(8,8,9,0.85)");
+    for (let f = 0; f <= 30; f++) { const x = 60 + f * 32; ctx.fillStyle = f === 15 ? C.gold : "rgba(255,255,255,0.18)"; ctx.fillRect(x - 1, 1118, f === 15 ? 4 : 2, 130); }
+    label("TARGET FRAME", 540, 1268, C.gold, 1, 20);
+    for (let i = 0; i < 6; i++) { const a = appear(u, 0.4 + i * 0.5, 0.15); if (a > 0) { fillR(60 + (15 + (rand(i * 3.3) - 0.5) * 22) * 32 - 7, 1136, 14, 40, 6, C.alarm, a); fillR(60 + 15 * 32 - 7, 1190, 14, 40, 6, C.go, a); } }
+  }
+  cards(u, d);
+  return sceneWords();
+};
+
+const CREEP = { versus: 0.6, sneak: 1, blind: 1, foxyoffice: 1, night: 0.8, guardwatch: 0.7, slowpath: 0.6, clip: 0.6, cams: 0.6 };
 function sceneAt(t) { let s = SCENES[0]; for (const sc of SCENES) if (t >= sc.start) s = sc; return s; }
 // 16:9: the art, scaled, on the right; kicker, headline and narration in a
 // left column; a chapter bar along the bottom.
@@ -830,7 +1510,7 @@ function leftColumn(scene, u, words, c, ka, ba) {
 function draw(t) {
   pending = [];
   const scene = sceneAt(t), u = t - scene.start;
-  CUE = scene.cues;
+  CUE = scene.cues; SP = scene.p || {};
   const c = scene.cues.find(q => u >= q.a - 0.1 && u <= q.b + 0.35) || null;
   const ka = Math.min(appear(u, 0.15, 0.4), 1 - clamp((u - scene.dur + 0.35) / 0.35));
   const ba = c ? appear(u, c.a - 0.1, 0.25) : 0;
@@ -848,6 +1528,8 @@ function draw(t) {
     leftColumn(scene, u, words, c, ka, ba);
   } else {
     ctx.save(); words = DRAW[scene.id](u, scene.dur); ctx.restore();
+    // the shorts are meant to be creepy: flicker-dark edges and grain
+    if (PID.startsWith("short_")) creep(u, CREEP[scene.id] ?? 0.5);
     bottomFade();
     bottomBlock(words.kicker, words.headline, c && c.text, ka, ba);
   }
@@ -874,7 +1556,7 @@ Object.entries(PRODUCTIONS).forEach(([id, pr]) => {
   a.addEventListener("click", () => { location.search = "?p=" + id; });
   prodChips.appendChild(a);
 });
-const names = { title: "Cold open", budget: "Power", first: "2023", map: "Pizzeria", ai: "The AI", doorway: "Doorway", freddy: "Freddy", foxy: "Foxy", senses: "Vision", match: "Matching", plan: "Brain", sim: "Simulator", hurdles: "Hurdles", attempts: "Scoreboard", results: "Results", closing: "Closing" };
+const names = { title: "Cold open", budget: "Power", first: "2023", map: "Pizzeria", ai: "The AI", doorway: "Doorway", freddy: "Freddy", freddyai: "Freddy's AI", foxy: "Foxy", senses: "Vision", match: "Matching", plan: "Brain", sim: "Simulator", hurdles: "Hurdles", attempts: "Scoreboard", results: "Results", closing: "Closing" };
 SCENES.forEach(s => { const b = document.createElement("button"); b.type = "button"; b.textContent = names[s.id] || s.id; b.dataset.id = s.id; b.addEventListener("click", () => { pos = s.start + 0.01; if (audio) audio.currentTime = pos; render(); }); chips.appendChild(b); });
 const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 let pos = 0, playing = false, last = 0;

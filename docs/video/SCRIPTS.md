@@ -1,8 +1,8 @@
 # Video scripts
 
-Generated from `video/lecture/productions.json` - the narration as recorded (Piper TTS, `en_GB-alan-medium`) and shown on screen as subtitles. Each heading is one animated scene (`DRAW.<name>` in `video/lecture/night_shift_lecture.html`).
+Generated from `video/lecture/productions.json` - the narration as recorded (Piper TTS, `en_GB-alan-medium`) and shown on screen as subtitles. Each numbered line is one animated scene (`DRAW.<name>` in `video/lecture/night_shift_lecture.html`).
 
-## Long form (16:9)  (`long`)
+## Long form (16:9)  (`long`, landscape)
 
 **1. title**
 
@@ -128,7 +128,7 @@ Generated from `video/lecture/productions.json` - the narration as recorded (Pip
 > That is the real difference between the two: not the code, but the method.
 > Class dismissed. Mind the left door.
 
-## Lecture (9:16)  (`lecture_v`)
+## Lecture (9:16)  (`lecture_v`, vertical)
 
 **1. title**
 
@@ -211,64 +211,182 @@ Generated from `video/lecture/productions.json` - the narration as recorded (Pip
 > That is the real difference between the two: not the code, but the method.
 > Class dismissed. Mind the left door.
 
-## Short: What if  (`short_whatif`)
+## Short: What if  (`short_whatif`, vertical)
 
-**1. title**
+**1. clip** - A BOT PLAYED FNAF ON MAX?
 
-> What if a bot played Five Nights at Freddy's on the hardest setting?
-> Every animatronic at 20. Nobody touching the mouse.
-> It watches the screen with OpenCV and plans every second of the night.
+> What if a bot played Five Nights at Freddy's on the hardest setting, with nobody touching the mouse? This is it, reaching 6 AM.
 
-**2. map**
+**2. cams** - FOUR AT MAX
 
-> Bonnie and Chica walk to the doors on a timer.
-> Bonnie comes down the west side.
-> Chica comes down the east side.
-> Freddy waits, and Foxy hides in Pirate Cove.
+> Four animatronics, all at level 20. Bonnie and Chica move at every chance, Freddy waits for you to look away, and Foxy runs.
 
-**3. results**
+**3. budget (split)** - THE POWER
 
-> It took 28 attempts to win a single night.
-> Now it wins seven nights in ten. Follow for how it works.
+> Worse, the game itself drains 71% of the battery. Every door, light and camera has to fit in the last 29%.
 
-## Short: Foxy  (`short_foxy`)
+**4. night** - IT WATCHES
 
-**1. foxy**
+> The bot reads the screen with OpenCV sixty times a second, shutting each door just in time and opening it again the moment it's safe.
 
-> Why does watching Foxy keep him still?
-> While any camera is up, the game re-rolls his lock, ten times a second. A camera flip at the right moment freezes him.
-> But his code checks that you're not looking at Pirate Cove before his timer runs.
-> So looking at him pauses his clock. Hold the cove 2.56 seconds, and he moves 2.54 seconds later.
-> At stage 3 he runs. Shut the left door, and he bangs on it: 1%, then 6%, then 11% of your battery.
+**5. attempts (count)** - 28 ATTEMPTS
 
-## Short: First bot  (`short_first`)
+> It lost its first twenty-four nights. Every loss was recorded, explained, and fixed, until attempt twenty-five reached 6 AM.
 
-**1. first**
+**6. results** - SIX AM
 
-> My first FNAF bot, in 2023.
-> It had three fatal flaws.
-> pyautogui.PAUSE = 1: a full second after every click.
-> The animatronics move every 4.97 seconds.
-> It was always too slow.
-> It was open-loop: light, door, cameras, and the script just ends.
-> It never checked what the light showed.
-> It could see one thing: am I on the cameras?
-> A blindfolded night guard with a metronome.
-> The new one watches, measures and plans. Part two next.
+> Now it wins seven nights out of ten, often with power to spare.
 
-## Short: How it sees  (`short_sees`)
+**7. recap** - YES. IT CAN.
 
-**1. senses**
+> So yes. A bot can survive the hardest night in Five Nights at Freddy's, by watching the screen and spending power smarter than the animatronics can drain it.
 
-> How does a bot see Five Nights at Freddy's?
-> Sixty screenshots a second, read with OpenCV's matchTemplate. No OCR.
-> A white mask stops the door's hazard stripes from turning 50% into 5%.
-> Doorways are checked against the game's own empty-hallway pictures.
-> And it never reads the game's files. Only the screen, like you.
+## Short: Foxy  (`short_foxy`, vertical)
 
-**2. match**
+**1. clip** - THE FOX THAT RUNS
 
-> Here's the trick, slowed down.
-> Each of the game's ten digit pictures slides across the power readout.
-> Where a digit really is, the score hits 1.
-> Only white pixels count. Follow for the rest.
+> This is Foxy, sprinting down the West Hall toward your left door. Yet he's the one animatronic that freezes when you watch him.
+
+**2. cams** - FOUR STAGES
+
+> He hides in Pirate Cove. Every 5.01 seconds he can move one stage further out, and at stage three he's gone.
+
+**3. lock** - A LOCK ON HIM
+
+> But he can only move once a lock counter runs out. While any camera is up, the game re-rolls that lock ten times a second, so a well-timed camera flip keeps him frozen.
+
+**4. pause** - WATCHING PAUSES HIM
+
+> And looking straight at Pirate Cove pauses his clock completely. Measured live: hold the cove for 2.56 seconds, and his next move comes 2.54 seconds later.
+
+**5. foxyoffice** - BANG. BANG. BANG.
+
+> When he does run, a shut left door stops him. But every bang costs power: 1% of your battery, then 6%, then 11%.
+
+**6. flips** - ALWAYS ON TIME
+
+> So the bot flips the camera just before every one of his ticks, keeping him locked behind the curtain all night.
+
+**7. recap** - FREEZE THE FOX
+
+> That's Foxy. Keep him locked with the camera, and he never gets the chance to run.
+
+## Short: First bot  (`short_first`, vertical)
+
+**1. code** - MY FIRST FNAF BOT
+
+> In 2023 I wrote a bot to beat Five Nights at Freddy's. It never survived a single night. Here's exactly why.
+
+**2. code** - A SECOND PER CLICK
+
+> Flaw one: every mouse action had a one-second pause built in, and the animatronics get a move every 4.97 seconds.
+
+**3. blind** - IT NEVER LOOKED
+
+> Flaw two: it ran a fixed list, light, door, camera, light, door, and then stopped. It never checked what the light showed, so Bonnie just walked in.
+
+**4. code** - ONE FUZZY MATCH
+
+> Flaw three: its only sense was one fuzzy image match, asking: am I looking at the cameras? No power, no clock, no animatronics.
+
+**5. clip** - LOOK, THEN ACT
+
+> The new bot looks at the screen sixty times a second, times every move to the frame, and reaches 6 AM on the hardest setting.
+
+**6. recap** - LOOK BEFORE YOU ACT
+
+> Same game, same mouse. The difference wasn't speed. It was looking before acting.
+
+## Short: How it sees  (`short_sees`, vertical)
+
+**1. clip** - THE BOT'S VIEW
+
+> This is what a bot sees when it plays Five Nights at Freddy's: sixty screenshots a second, read with OpenCV.
+
+**2. match (slide)** - TEMPLATE MATCHING
+
+> To read the power, the game's own digit pictures slide across the screen. Where one fits exactly, the match score jumps to one.
+
+**3. match (mask)** - THE HAZARD STRIPES
+
+> Only pure white pixels count. Without that, the yellow hazard stripes on the left door once made 50% read as 5.
+
+**4. clip** - BONNIE DETECTED
+
+> Each doorway is compared with the game's own picture of an empty, lit hallway. Anything different is an animatronic, and the door shuts.
+
+**5. cams** - WHO IS WHERE
+
+> On the monitor, the room name tells it which camera it's on, and each picture is graded: how far out Foxy is, and whether Freddy is at the door.
+
+**6. recap** - IT SEES WHAT YOU SEE
+
+> No memory reading, no game files. It sees exactly what you see, and that's enough to survive the night.
+
+## Short: Freddy  (`short_freddy`, vertical)
+
+**1. clip** - THOSE TWO DOTS ARE FREDDY
+
+> Those two dots are Freddy, staring into the corner camera. Look away now, and he walks right in.
+
+**2. cams** - THE SHOW STAGE
+
+> He starts on the show stage, and he won't leave it until Bonnie and Chica have both gone.
+
+**3. route** - THE EAST SIDE
+
+> Then he takes the east side: the dining area, the restrooms, the kitchen, the east hall, and the corner outside your right door.
+
+**4. cams** - ON THE CAMERAS
+
+> On camera he's barely there, just two eyes glinting in the dark. The kitchen camera has no picture at all, only sound.
+
+**5. roll** - A DICE ROLL
+
+> Every 3.02 seconds he rolls a twenty-sided die. A success starts a countdown of 1000 minus 100 times his AI level, in frames. At level 20, that's zero.
+
+**6. slowpath** - WATCHING SLOWS HIM DOWN
+
+> And he only moves while your monitor is down. Every tick that lands while you're watching is a tick he can't use, so keeping your eyes on him slows him down the whole way to 4B.
+
+**7. sneak** - LOOK AWAY, AND HE'S IN
+
+> At the corner, he walks in only if your right door is open while your camera shows anything but him. Check Pirate Cove a second too long, and he's in the office.
+
+**8. guardwatch** - STARE HIM DOWN
+
+> So the bot ends every camera flip on 4B. While it's watching him, he can't come in, and the right door stays open, costing no power.
+
+**9. recap** - KEEP YOUR EYES ON 4B
+
+> That's all of Freddy. He moves only when you're not looking, and gets in only when you look away from him. Keep your eyes on 4B, and he never will.
+
+## Short: Human vs robot  (`short_versus`, vertical)
+
+**1. versus (intro)** - HUMAN VS ROBOT
+
+> Same night, every animatronic at maximum. On the left, a human guard who doesn't know the rules. On the right, a robot that knows every one of them.
+
+**2. versus (power)** - THE BATTERY
+
+> The human shuts a door the moment anything moves and leaves the lights on to feel safe, and every second of that costs power. The robot shuts each door just before an animatronic's move, and flashes the lights between the game's once-a-second power charges, for free.
+
+**3. versus (freddy)** - FREDDY
+
+> The human checks Pirate Cove with the right door open, and Freddy walks right in. The robot knows Freddy's rule, and ends every camera flip on 4B.
+
+**4. versus (timing)** - REACTION TIME
+
+> A person reacts. The robot's clicks land on the exact frame they were planned for, sixty frames a second, timed to the game's own clock.
+
+**5. versus (foxy)** - FOXY
+
+> The human forgets about Foxy until he's already running. The robot flips the camera just before each of his moves, so he never leaves the curtain.
+
+**6. versus (result)** - LIGHTS OUT VS 6 AM
+
+> The human's battery dies at 4 AM, and Freddy comes for them in the dark. The robot reaches 6 AM, with power left.
+
+**7. recap** - KNOWLEDGE, NOT LUCK
+
+> It isn't flawless: the robot still loses about three nights in ten. But it wastes no power, knows every rule, and never misses a frame. That's the whole difference.

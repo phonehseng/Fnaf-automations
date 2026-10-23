@@ -101,7 +101,9 @@ def main() -> None:
         print(f"== {pid}")
         for si, scene in enumerate(prods[pid]["scenes"]):
             draw = scene["draw"]
-            at, cues, pieces = LEAD, [], []
+            # shorts cut faster: less air around each scene
+            lead, tail = (0.25, 0.45) if pid.startswith("short_") else (LEAD, TAIL)
+            at, cues, pieces = lead, [], []
             for i, text in enumerate(scene["cues"]):
                 at = max(at, CUE_NOT_BEFORE.get((draw, i), 0.0))
                 audio = synth(voice, speakable(text))
@@ -109,7 +111,7 @@ def main() -> None:
                 cues.append([round(at, 3), round(at + dur, 3)])
                 pieces.append((at, audio))
                 at += dur + GAP
-            dur = max(at - GAP + TAIL, SCENE_MIN.get(draw, 0.0))
+            dur = max(at - GAP + tail, SCENE_MIN.get(draw, 0.0) if not pid.startswith("short_") else 0.0)
             timing[str(si)] = {"dur": round(dur, 3), "cues": cues}
             track.append((start, pieces))
             start += dur
