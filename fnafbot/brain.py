@@ -106,11 +106,11 @@ FOXY_VERIFY_EVERY = 15.0
 # before the earliest possible end of that fuse.
 FOXY_FUSE_SECONDS = 24.5
 # A planned door click that has to come before a Foxy flip starts this much
-# earlier than the bare pan + click cooldown: the click job also waits for
-# the cooldown and confirms the door lamp. With 0.15 s the flip after it
-# was regularly 0.1 - 0.2 s late in the simulator - late enough to leave
-# Foxy's tick uncovered.
-FLIP_DOOR_SLACK = 0.4
+# earlier than the bare pan + click cooldown. 0.4 s covered more of Foxy's
+# ticks in the simulator, but live (campaign59) the earlier shut kept the
+# left door closed through Bonnie's whole cycle far more often: 50 s of
+# "before camera flip" in one night against 4 - 16 s before. Back to 0.15.
+FLIP_DOOR_SLACK = 0.15
 FOXY_ALERT_LEAD = 7.0
 # Foxy's real tick may come up to this long after the one the brain
 # computes from rules.TICK_PHASE (measured to within ~0.1 s from his bangs;
