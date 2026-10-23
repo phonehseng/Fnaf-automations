@@ -1297,3 +1297,33 @@ the right 38 s, the camera up 59 s. The margin was a few seconds of power -
 the run-to-run spread is still large, so the next work is making the win
 repeatable: fewer Foxy alerts (each costs a door cycle and a cove look) and
 less left-door time when Bonnie's schedule conflicts.
+
+### The power clock never fitted (found on the OBS recording of the 4/20 win)
+
+The win had a few seconds of power to spare, while the simulator ends 4/20
+nights with ~12 %. To find the missing ~13 %, the recording of #25 was
+read frame by frame (`usage meter` bars and the power digits, with the
+bot's own digit reader):
+
+* The game's usage meter, read at every whole second after the first
+  frame, adds up to ~280 units of extra use (doors, lights, camera) - what
+  the battery actually lost. Averaged over time it is only ~213: the bot's
+  "charge-free" timing was not dodging the charges at all.
+* All 92 clean 1 % drops of the night came within 0.04 s of a whole
+  second after the first frame: the power timer ran at exactly 1.000 real
+  seconds per game second. The bot assumed 1.0065 (`rules.TICK_SECONDS`,
+  measured on the early nights), so its "whole seconds" slid 3.5 s off the
+  real charges over the night, and its quiet moment wandered through every
+  phase (per minute: 0.43, 0.00, 0.27, 0.37, 0.80, 0.17 ...).
+* The fit that should have corrected the length of a game second never
+  ran: it matched each power change against a fixed +-0.25 s around the
+  starting guess and wanted 20 sightings first. A 1 % change comes only
+  every 5 - 8 s at 4/20 drain, the 0.65 % error carries the charges out of
+  that window after ~40 s, and from then on every sighting was rejected.
+  `Clock fitted` appears in one live log out of the last thirty.
+
+Now each power change is matched to the charge nearest the clock's CURRENT
+line, the night start is corrected from the first sighting, and the slope
+is fitted from four sightings over 20 s. A test feeds it a sparse 4/20-like
+night with the guess 0.65 % off either way: locked on within 0.07 s by
+~60 s, within 0.01 - 0.03 s after that. The starting guess is now 1.000 s.

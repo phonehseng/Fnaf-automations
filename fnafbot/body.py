@@ -7,8 +7,9 @@ keeps the night clock.
 The night clock
     Every game timer counts from the first frame of the night, which is the
     first frame where the office HUD is visible. The brain thinks in GAME
-    seconds (tick k of the power timer is at exactly k game seconds), but a
-    game second is a little longer than a real one (rules.TICK_SECONDS).
+    seconds (tick k of the power timer is at exactly k game seconds), and a
+    game second is not always exactly a real one: its length changes from
+    session to session (rules.TICK_SECONDS is only the starting guess).
     now() converts. Power changes are seen 0.01 - 0.03 s after each tick, and
     the clock keeps refining both the night start and the length of a game
     second from them (see _calibrate()), so the brain can time actions to a
@@ -46,9 +47,26 @@ CAPTURE_LATENCY = 0.015
 # Measuring the game second: fit a line through (tick number, time seen) for
 # the power changes, once there are enough of them spread over enough ticks.
 # The slope is the real length of a game second. Clamped to a sane range.
-SCALE_MIN_SIGHTINGS = 20
-SCALE_MIN_SPAN_TICKS = 30
-SCALE_RANGE = (0.995, 1.02)
+# Power changes by 1 % only every 5 - 8 s, so the fit has to start from a
+# few of them (it once asked for 20 - see CLOCK_TRACK_WINDOW for why that
+# meant it never started at all).
+SCALE_MIN_SIGHTINGS = 4
+SCALE_MIN_SPAN_TICKS = 20
+SCALE_RANGE = (0.99, 1.02)
+# A power change is matched to the charge nearest to where the CURRENT clock
+# puts it, and ignored if it is further away than this (Foxy's bang, a
+# misread). The clock follows the game, so the match stays right all night.
+# (It used to be matched against a fixed +-0.25 s around the starting guess:
+# with the guess 0.65 % off, the real charges drifted out of that window
+# after ~40 s - before the fit had its 20 sightings - and from then on every
+# sighting was thrown away. Live, the fit did not start on a single 6th
+# Night or 4/20 night, and by 6 AM the brain's "whole seconds" were 3.5 s
+# off the real charges: its charge-free timing of lights, flips and doors
+# landed at random. docs/DEVLOG.md, "the power clock never fitted".)
+CLOCK_TRACK_WINDOW = 0.3
+# For this long after the first frame, the movement timers' origin
+# (real_origin) follows the clock's corrections; after that it stays put.
+ORIGIN_SETTLES_AFTER = 30
 FIT_WINDOW_TICKS = 120           # fit the clock to the last two minutes of sightings
 # A power change only counts for the fit if the HUD was looked at this
 # shortly before (so the moment of the change is known to +- half of it).
@@ -116,15 +134,14 @@ class RealBody:
         self.vision = vision
         self.stop_flag = stop_flag
         self.t0 = 0.0                       # perf_counter() at the night's first frame
-        self.t0_upper_bound = 0.0           # best proven upper bound on the true night start
         self.scale = rules.TICK_SECONDS     # real seconds per game (power) second
         self.tick_phases = dict(rules.TICK_PHASE)   # movement timers: real-second offsets after the night start
         # From the flip request to a readable camera picture, measured live
         # (hover, flip-up animation, label visible): longer than the bare
         # animation the rules quote. The brain plans Foxy flips with it.
         self.camera_up_seconds = CAMERA_UP_LIVE
-        self._power_sightings: list[tuple[int, float]] = []   # (tick number, perf_counter seen)
-        self._fitted = False                # has the line fit taken over the clock?
+        self._power_sightings: list[tuple[int, float]] = []   # (tick number, perf_counter of the change)
+        self._fitted = False                # has the line fit (with its slope) taken over the clock?
         # The animatronics' movement timers run in REAL seconds from the
         # night's first frame. That origin is fixed once the early power
         # sightings have refined it; the power clock's own fit (t0, scale)
@@ -159,7 +176,6 @@ class RealBody:
             if self.vision.hud_visible(frame):
                 self.t0 = time.perf_counter() - CAPTURE_LATENCY
                 self.real_origin = self.t0
-                self.t0_upper_bound = self.t0 + CAPTURE_LATENCY
                 self.last_hud_seen = time.perf_counter()
                 log.info("Night started (clock running)")
                 return
@@ -170,7 +186,6 @@ class RealBody:
         (``first_hud_frame`` is a time.perf_counter() value)."""
         self.t0 = first_hud_frame
         self.real_origin = first_hud_frame
-        self.t0_upper_bound = first_hud_frame + CAPTURE_LATENCY
         self.last_hud_seen = time.perf_counter()
         log.info("Night started (clock running)")
 
@@ -192,58 +207,57 @@ class RealBody:
         previous look at the HUD (which still showed the old value) was
         ``gap`` seconds earlier, so the change happened inside that gap.
 
-        Power only changes on the power timer's ticks: tick k happens at
-        night_start + k * scale (real seconds). Two things are learned:
-
-        1. The night start. The change was seen AFTER it happened, so each
-           sighting proves night_start <= seen_at - k * scale. The tightest
-           such bound is the best early estimate.
-        2. The scale (length of a game second). A straight line fitted
-           through (k, time of change) has slope = scale. Without this the
-           clock drifts about 3.5 s over a night - enough to let Bonnie in
-           (docs/DEVLOG.md). Only changes pinned down to a short gap are
-           used for the fit: while the bot is busy it may not look at the
-           HUD for a second, and such a late sighting would bend the line.
+        Power only changes on the power timer's charges: charge k happens at
+        t0 + k * scale (real seconds). Measured on the OBS recording of live
+        4/20 #25: all 92 clean 1 % drops of the night came within 0.04 s of
+        a whole second after the first frame - the charges follow one steady
+        line. Each sighting is matched to the charge nearest to where the
+        current line puts it (CLOCK_TRACK_WINDOW), and the line is fitted
+        again (_refit_clock), so the clock keeps following the game.
         """
         if gap > SIGHTING_MAX_GAP:
-            return   # noticed late: cannot even tell which tick it was
-        elapsed = seen_at - self.t0
-        k = round(elapsed / self.scale)
-        if k < 1 or abs(elapsed - k * self.scale) > 0.25:
-            return   # nowhere near a tick: not a whole-second charge
-        if not self._fitted:
-            bound = seen_at - k * self.scale
-            if abs(elapsed - k * self.scale) < 0.08 + gap and bound < self.t0_upper_bound:
-                self.t0_upper_bound = bound
-                self.t0 = bound - gap / 2
-                self.real_origin = self.t0      # early in the night both clocks agree
-        self._power_sightings.append((k, seen_at - gap / 2))   # best guess: mid-gap
+            return   # noticed late: cannot tell when it happened
+        changed_at = seen_at - gap / 2          # best guess: the middle of the gap
+        k = round((changed_at - self.t0) / self.scale)
+        if k < 1 or abs(changed_at - (self.t0 + k * self.scale)) > CLOCK_TRACK_WINDOW:
+            return   # nowhere near a charge: Foxy's bang or a misread
+        self._power_sightings.append((k, changed_at))
         self._refit_clock()
 
     def _refit_clock(self) -> None:
-        """Fit seen_at = t0 + k * scale through all power sightings so far.
+        """Fit changed_at = t0 + k * scale through the recent power sightings.
 
-        The slope is the length of a game second; the intercept (minus the
-        typical capture delay) is the night start. Sightings far off the
-        line - the extra charge for Foxy's bang - are dropped and the line
-        fitted again."""
+        With a handful of sightings spread over SCALE_MIN_SPAN_TICKS, both
+        the slope (length of a game second) and the intercept (night start)
+        are fitted. Before that, only the night start is corrected, from the
+        latest sightings, keeping the starting guess of the game second.
+        Sightings far off the line are dropped and the line fitted again."""
         # Only the recent sightings: the game's pace changes with what is
         # on screen, so an all-night line would lag behind the current speed.
-        sightings = [s for s in self._power_sightings if s[0] >= self._power_sightings[-1][0] - FIT_WINDOW_TICKS]
-        if len(sightings) < SCALE_MIN_SIGHTINGS or sightings[-1][0] - sightings[0][0] < SCALE_MIN_SPAN_TICKS:
-            return
+        latest = self._power_sightings[-1][0]
+        sightings = [s for s in self._power_sightings if s[0] >= latest - FIT_WINDOW_TICKS]
         ticks = np.array([k for k, _ in sightings], dtype=float)
         seen = np.array([t for _, t in sightings])
-        slope, intercept = np.polyfit(ticks, seen, 1)
-        on_line = np.abs(seen - (slope * ticks + intercept)) < 0.1
-        if on_line.sum() >= SCALE_MIN_SIGHTINGS:
-            slope, intercept = np.polyfit(ticks[on_line], seen[on_line], 1)
-        new_scale = min(max(float(slope), SCALE_RANGE[0]), SCALE_RANGE[1])
-        new_t0 = float(intercept)      # sightings are already mid-gap, so no delay to subtract
-        if abs(new_scale - self.scale) > 0.0002 or abs(new_t0 - self.t0) > 0.02:
-            log.info("Clock fitted from %d power changes: game second = %.4f real s (was %.4f), "
-                     "night start moved %+.3f s", len(sightings), new_scale, self.scale, new_t0 - self.t0)
-        self.scale, self.t0, self._fitted = new_scale, new_t0, True
+        if len(sightings) < SCALE_MIN_SIGHTINGS or ticks[-1] - ticks[0] < SCALE_MIN_SPAN_TICKS:
+            # Too few for a slope: move the night start only.
+            new_scale = self.scale
+            new_t0 = float(np.median(seen[-3:] - ticks[-3:] * self.scale))
+        else:
+            slope, intercept = np.polyfit(ticks, seen, 1)
+            on_line = np.abs(seen - (slope * ticks + intercept)) < 0.1
+            if on_line.sum() >= SCALE_MIN_SIGHTINGS:
+                slope, intercept = np.polyfit(ticks[on_line], seen[on_line], 1)
+            new_scale = min(max(float(slope), SCALE_RANGE[0]), SCALE_RANGE[1])
+            new_t0 = float(intercept)
+            if not self._fitted:
+                log.info("Clock fitted from %d power changes: game second = %.4f real s", len(sightings), new_scale)
+            self._fitted = True
+        if abs(new_scale - self.scale) > 0.0005 or abs(new_t0 - self.t0) > 0.05:
+            log.info("Clock: game second = %.4f real s (was %.4f), night start moved %+.3f s",
+                     new_scale, self.scale, new_t0 - self.t0)
+        self.scale, self.t0 = new_scale, new_t0
+        if latest <= ORIGIN_SETTLES_AFTER:
+            self.real_origin = self.t0      # early in the night both clocks agree
 
     def _ensure_game(self, frame: np.ndarray | None = None) -> bool:
         """If someone switched away from the game, bring it back first.

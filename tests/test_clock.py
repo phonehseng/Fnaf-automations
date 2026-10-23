@@ -56,7 +56,7 @@ def test_game_second_scale_is_learned_from_power_changes():
 
     body = body_module.RealBody.__new__(body_module.RealBody)
     body.t0 = 1000.0
-    body.t0_upper_bound = 1000.02
+    body.real_origin = 1000.0
     body.scale = 1.0                    # start with a wrong belief: 1 game s = 1 real s
     body._power_sightings = []
     body._fitted = False
@@ -74,6 +74,45 @@ def test_game_second_scale_is_learned_from_power_changes():
     assert abs(body.t0 - 1000.0) < 0.02
     # The brain's clock (game seconds) now agrees with the real tick times.
     assert abs((1000.0 + 500 * true_scale - body.t0) / body.scale - 500) < 0.05
+
+
+def _sparse_power_night(true_scale: float, guess: float, seed: int):
+    """A night as the bot sees it: the power display only changes when the
+    battery crosses a whole percent (every 5 - 8 s at 4/20 drain), the HUD
+    is looked at every 0.03 - 0.1 s while the bot is idle, and now and then
+    it is busy for a second (a late sighting, which must not count)."""
+    from fnafbot import body as body_module
+
+    body = body_module.RealBody.__new__(body_module.RealBody)
+    body.t0 = 1000.0
+    body.real_origin = 1000.0
+    body.scale = guess
+    body._power_sightings = []
+    body._fitted = False
+    rng = np.random.default_rng(seed)
+    errors = []                      # (charge, how far the clock's whole second is from it)
+    units = 999
+    for k in range(1, 536):
+        units -= int(rng.choice([1, 2, 2, 3])) + (1 if k % 3 == 0 else 0)
+        if units // 10 != (units + 1) // 10 or rng.random() < 0.15:
+            charge = 1000.0 + k * true_scale
+            gap = rng.uniform(0.03, 0.1) if rng.random() > 0.1 else 1.0
+            body._calibrate(charge + rng.uniform(0.0, gap) + 0.015, gap=gap)
+        errors.append((k, body.t0 + k * body.scale - (1000.0 + k * true_scale)))
+    return body, errors
+
+
+def test_power_clock_follows_sparse_changes():
+    """On live 4/20 nights the fit never started (DEVLOG: "the power clock
+    never fitted"): the clock must lock on with a power change only every
+    few seconds, whether the starting guess is too long or too short."""
+    for true_scale, guess in ((1.0, 1.0065), (1.0065, 1.0), (1.003, 1.0)):
+        for seed in range(3):
+            body, errors = _sparse_power_night(true_scale, guess, seed)
+            # Locked on within a minute; well inside POWER_TICK_GUARD after that.
+            assert max(abs(e) for k, e in errors if k >= 40) < 0.08, (true_scale, guess, seed)
+            assert max(abs(e) for k, e in errors if k >= 100) < 0.04, (true_scale, guess, seed)
+            assert abs(body.scale - true_scale) < 0.001
 
 
 def test_power_misreads_are_ignored():

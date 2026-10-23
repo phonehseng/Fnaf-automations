@@ -16,13 +16,14 @@ import math
 FPS = 60                       # the game runs at 60 frames per second
 FRAME = 1.0 / FPS
 
-# How many REAL seconds one of the game's "every 1 second" ticks takes.
-# Measured on the live game: 6 AM (after 535 game seconds) arrived about
-# 538.5 real seconds after the night's first frame, in every logged night.
-# Every animatronic timer is the same kind of Clickteam timer, so all tick
-# times in this file are in GAME seconds; the body converts (see
-# docs/DEVLOG.md, "the game's clock runs slow").
-TICK_SECONDS = 1.0065
+# How many REAL seconds one of the game's "every 1 second" ticks takes - the
+# STARTING GUESS only; the body measures it during the night from the power
+# changes (body._calibrate). It is not a constant of the game: early nights
+# of this project gave 1.0065 (6 AM about 538.5 real s after the first
+# frame, docs/DEVLOG.md "the game's clock runs slow"), while on 2026-10-22
+# the OBS recording of live 4/20 #25 showed the power charges exactly 1.000
+# real s apart all night (92 drops, all within 0.04 s of a whole second).
+TICK_SECONDS = 1.0
 
 # Movement ticks (Bonnie, Chica, Foxy) are computed in REAL seconds after
 # the night start: k x period + phase. The power clock is measured
