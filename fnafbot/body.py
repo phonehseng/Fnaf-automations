@@ -19,6 +19,7 @@ The night clock
 from __future__ import annotations
 
 import ctypes
+import math
 from dataclasses import replace
 import logging
 import time
@@ -63,7 +64,14 @@ SCALE_RANGE = (0.99, 1.02)
 # Night or 4/20 night, and by 6 AM the brain's "whole seconds" were 3.5 s
 # off the real charges: its charge-free timing of lights, flips and doors
 # landed at random. docs/DEVLOG.md, "the power clock never fitted".)
-CLOCK_TRACK_WINDOW = 0.3
+CLOCK_TRACK_WINDOW = 0.2
+# One power change may move the clock by at most this much (at the charge it
+# was seen at). The first live night with the tracking fit (#26) showed why:
+# a few bad sightings - Foxy's bang, camera frames stamped late - threw the
+# night start around by 0.2 - 0.5 s, and every game time the brain had
+# stored moved with it. A real error still gets corrected, over a few
+# sightings.
+CLOCK_MAX_STEP = 0.06
 # For this long after the first frame, the movement timers' origin
 # (real_origin) follows the clock's corrections; after that it stays put.
 ORIGIN_SETTLES_AFTER = 30
@@ -142,6 +150,11 @@ class RealBody:
         self.camera_up_seconds = CAMERA_UP_LIVE
         self._power_sightings: list[tuple[int, float]] = []   # (tick number, perf_counter of the change)
         self._fitted = False                # has the line fit (with its slope) taken over the clock?
+        # The power shown on the last OFFICE frame, and when that frame was
+        # grabbed: the clock only learns from 1 % drops between two office
+        # frames grabbed close together (see _note_hud).
+        self._clock_power: int | None = None
+        self._clock_look_at = 0.0
         # The animatronics' movement timers run in REAL seconds from the
         # night's first frame. That origin is fixed once the early power
         # sightings have refined it; the power clock's own fit (t0, scale)
@@ -244,7 +257,7 @@ class RealBody:
             new_t0 = float(np.median(seen[-3:] - ticks[-3:] * self.scale))
         else:
             slope, intercept = np.polyfit(ticks, seen, 1)
-            on_line = np.abs(seen - (slope * ticks + intercept)) < 0.1
+            on_line = np.abs(seen - (slope * ticks + intercept)) < 0.08
             if on_line.sum() >= SCALE_MIN_SIGHTINGS:
                 slope, intercept = np.polyfit(ticks[on_line], seen[on_line], 1)
             new_scale = min(max(float(slope), SCALE_RANGE[0]), SCALE_RANGE[1])
@@ -252,7 +265,13 @@ class RealBody:
             if not self._fitted:
                 log.info("Clock fitted from %d power changes: game second = %.4f real s", len(sightings), new_scale)
             self._fitted = True
-        if abs(new_scale - self.scale) > 0.0005 or abs(new_t0 - self.t0) > 0.05:
+        # Move the clock at most CLOCK_MAX_STEP at the latest charge (the
+        # slope is taken as fitted; only the jump "now" is limited).
+        old_at = self.t0 + latest * self.scale
+        step = new_t0 + latest * new_scale - old_at
+        if abs(step) > CLOCK_MAX_STEP:
+            new_t0 = old_at + math.copysign(CLOCK_MAX_STEP, step) - latest * new_scale
+        if abs(new_scale - self.scale) > 0.0005:
             log.info("Clock: game second = %.4f real s (was %.4f), night start moved %+.3f s",
                      new_scale, self.scale, new_t0 - self.t0)
         self.scale, self.t0 = new_scale, new_t0
@@ -334,13 +353,14 @@ class RealBody:
             return True
         return False
 
-    def _note_hud(self, hud, stamp: float) -> None:
+    def _note_hud(self, hud, stamp: float, exact: bool = True) -> None:
         """Book a HUD reading taken at ``stamp``: the clock learns from power
         changes, and the power is traced to the log now and then. Called for
         office frames AND camera frames (the HUD shows on both), so the clock
         keeps following the game's speed while the monitor is up - the game
         runs at a slightly different pace then (measured with
-        tools/measure_ticks.py)."""
+        tools/measure_ticks.py). ``exact``: ``stamp`` is when the frame was
+        grabbed (office frames), not just when it was read (camera frames)."""
         if hud.power is not None and not self._power_reading_ok(hud.power):
             hud = replace(hud, power=None)      # a misread: keep the last good value
         if hud.power is not None:
@@ -355,10 +375,15 @@ class RealBody:
                 if self.last_power - hud.power >= BANG_MIN_DROP:
                     self.bangs.append(at)
                     log.info("power %d%% -> %d%% at %.2f s: Foxy's bang", self.last_power, hud.power, at)
-            if self.last_power is not None and hud.power != self.last_power:
-                # The change happened somewhere between the previous look at
-                # the HUD and this one.
-                self._calibrate(stamp, gap=stamp - self.last_hud_seen)
+            if exact:
+                # The clock learns only from an ordinary charge (a 1 % drop)
+                # seen between two office frames whose grab times are known:
+                # not from Foxy's bangs, not from a misread putting the
+                # power back up, not from camera frames (read long after
+                # they were grabbed).
+                if self._clock_power is not None and hud.power == self._clock_power - 1:
+                    self._calibrate(stamp, gap=stamp - self._clock_look_at)
+                self._clock_power, self._clock_look_at = hud.power, stamp
             self.last_power = hud.power
             if self.now() - self.power_logged_at >= POWER_LOG_EVERY:
                 self.power_logged_at = self.now()
@@ -372,8 +397,8 @@ class RealBody:
         frame = self.ctl.window.grab()
         if self._ensure_game(frame):
             frame = self.ctl.window.grab()
+        stamp = time.perf_counter()        # just after the grab (reading it takes a while)
         hud = self.vision.read_hud(frame)
-        stamp = time.perf_counter()
         if hud.visible:
             self.hud_missing_since = None
             self.hud_missing_count = 0
@@ -631,7 +656,7 @@ class RealBody:
         """Read the HUD off a camera frame (if it shows) for the clock."""
         hud = self.vision.read_hud(frame)
         if hud.visible:
-            self._note_hud(hud, time.perf_counter())
+            self._note_hud(hud, time.perf_counter(), exact=False)
 
     def power(self) -> int:
         return self.last_power if self.last_power is not None else 0

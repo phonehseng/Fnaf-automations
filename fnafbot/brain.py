@@ -797,6 +797,8 @@ class Brain:
         else:
             self.door_shut_since[watch.side] = now
             self.door_shut_reason[watch.side] = reason or "?"
+        # One line per door click, whatever caused it (tools/door_report.py).
+        log.info("%.2fs  DOOR %s %s (%s)", now, watch.side, "opens" if watch.door_closed else "shuts", reason or "?")
 
     def _door_note(self, watch: DoorWatch) -> str:
         """Short door state for the status panel: open, or shut for how long

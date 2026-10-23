@@ -35,6 +35,7 @@ def main() -> None:
     spans = {"left": [], "right": []}
     shut_at: dict[str, tuple[float, str] | None] = {"left": None, "right": None}
     camera = 0.0
+    exact = False      # the log has the one-line-per-click DOOR messages
     flips = 0
     end = 0.0
     for line in open(path, encoding="utf-8", errors="replace"):
@@ -48,6 +49,22 @@ def main() -> None:
             continue
         t, msg = float(m.group(1)), m.group(2).strip()
         end = max(end, t)
+        # Logs from 2026-10-23 on have one line per door click, whatever
+        # caused it ("DOOR left shuts (reason)"); the older messages below
+        # missed some reopens (a door "released" after a Foxy alert).
+        m = re.search(r"DOOR (left|right) (shuts|opens) \((.*)\)", msg)
+        if m:
+            exact = True
+            side, what, why = m.group(1), m.group(2), m.group(3)
+            if what == "shuts" and shut_at[side] is None:
+                shut_at[side] = (t, why)
+            elif what == "opens" and shut_at[side] is not None:
+                t0, why0 = shut_at[side]
+                spans[side].append((t0, t, why0, f"opened ({why})"))
+                shut_at[side] = None
+            continue
+        if exact:
+            continue
         m1 = re.search(r"(BONNIE|CHICA) AT (LEFT|RIGHT) DOOR - door closed \((.*)\)", msg)
         m2 = re.search(r"(left|right) door closed \((.*)\)", msg)
         if m1 or m2:

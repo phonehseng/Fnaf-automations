@@ -79,8 +79,9 @@ def test_game_second_scale_is_learned_from_power_changes():
 def _sparse_power_night(true_scale: float, guess: float, seed: int):
     """A night as the bot sees it: the power display only changes when the
     battery crosses a whole percent (every 5 - 8 s at 4/20 drain), the HUD
-    is looked at every 0.03 - 0.1 s while the bot is idle, and now and then
-    it is busy for a second (a late sighting, which must not count)."""
+    is looked at every 0.03 - 0.1 s while the bot is idle, now and then it
+    is busy for a second (a late sighting, which must not count), and one
+    sighting in ten is simply wrong by up to 0.18 s."""
     from fnafbot import body as body_module
 
     body = body_module.RealBody.__new__(body_module.RealBody)
@@ -97,7 +98,8 @@ def _sparse_power_night(true_scale: float, guess: float, seed: int):
         if units // 10 != (units + 1) // 10 or rng.random() < 0.15:
             charge = 1000.0 + k * true_scale
             gap = rng.uniform(0.03, 0.1) if rng.random() > 0.1 else 1.0
-            body._calibrate(charge + rng.uniform(0.0, gap) + 0.015, gap=gap)
+            stale = rng.uniform(-0.18, 0.18) if rng.random() < 0.1 else 0.0   # a bad sighting
+            body._calibrate(charge + rng.uniform(0.0, gap) + 0.015 + stale, gap=gap)
         errors.append((k, body.t0 + k * body.scale - (1000.0 + k * true_scale)))
     return body, errors
 
@@ -107,11 +109,11 @@ def test_power_clock_follows_sparse_changes():
     never fitted"): the clock must lock on with a power change only every
     few seconds, whether the starting guess is too long or too short."""
     for true_scale, guess in ((1.0, 1.0065), (1.0065, 1.0), (1.003, 1.0)):
-        for seed in range(3):
+        for seed in range(6):
             body, errors = _sparse_power_night(true_scale, guess, seed)
             # Locked on within a minute; well inside POWER_TICK_GUARD after that.
-            assert max(abs(e) for k, e in errors if k >= 40) < 0.08, (true_scale, guess, seed)
-            assert max(abs(e) for k, e in errors if k >= 100) < 0.04, (true_scale, guess, seed)
+            assert max(abs(e) for k, e in errors if k >= 40) < 0.12, (true_scale, guess, seed)
+            assert max(abs(e) for k, e in errors if k >= 100) < 0.05, (true_scale, guess, seed)
             assert abs(body.scale - true_scale) < 0.001
 
 
