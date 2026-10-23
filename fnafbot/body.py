@@ -527,6 +527,7 @@ class RealBody:
         if self.ctl.selected_camera == camera and self.shown_camera() in (camera, None):
             return
         for attempt in range(3):
+            self.camera_clicked_at = self.now()     # (night time of the click itself)
             self.ctl.mouse.click(*layout.CAMERA_BUTTONS[camera])
             self._switched_at = time.perf_counter()
             deadline = time.perf_counter() + 0.35

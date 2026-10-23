@@ -189,6 +189,12 @@ class NightSim:
         self.frame += 1
         now = self.now
         lagged = now - self.timer_lag(now)
+        # Foxy's timer stands still while Pirate Cove is on screen and while
+        # he is at stage 3 or running (his tick event's earlier conditions
+        # are false, and Clickteam only counts an "every" timer while it is
+        # evaluated) - measured live, tools/foxy_pause_test.py.
+        if self.viewing == "1C" or self.foxy_stage >= 3:
+            self.timers["foxy"].next_time += FRAME
         fired = {name: timer.fires(lagged if name in LAGGING_TIMERS else now)
                  for name, timer in self.timers.items()}
 
@@ -551,6 +557,7 @@ class SimBody:
         return True
 
     def select_camera(self, camera: str) -> None:
+        self.camera_clicked_at = self.now()
         self.sim.pending_camera_select = camera
         self.sim.step()
 

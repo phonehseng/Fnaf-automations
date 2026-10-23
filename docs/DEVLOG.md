@@ -1219,3 +1219,33 @@ evaluated, every look at the cove pauses it - and the bot's fixed-phase
 model of his ticks drifts by the length of every cove look. The test holds
 the cove on screen for set times between bangs and measures how far his
 phase moves. Its first two runs were spoiled by the misreads above.
+
+### Found: looking at Pirate Cove PAUSES Foxy's timer
+
+`tools/foxy_pause_test.py` (Foxy alone, left door shut, camera down; his
+phase from each bang, the cove held on screen between bangs), once the
+misreads were fixed and the game restarted out of a stuck power-out:
+
+```
+bang 1 -> bang 2, cove held 2.56 s:  his ticks moved -2.473 s  (= +2.54 s on his 5.01 s cycle)
+bang 2 -> bang 3, no hold:           his ticks moved -0.126 s
+```
+
+His tick event ([191]) checks "viewing != 99" (99 = camera 1C, event [141])
+and "fox progress < 3" BEFORE its "every 5.01 seconds" timer, and Clickteam
+only counts an "every" timer down while it is evaluated - so it stands
+still while the cove is on screen, and while he is at stage 3 or running.
+Every cove look the bot made (alerts, checks, verifications) pushed his
+real ticks later by its length while the bot's model kept them in place -
+after a few looks the flips sat seconds away from his ticks, the random
+lock ran out about one tick in ten, and on busy 4/20 nights he climbed a
+stage every few ticks. Bonnie's and Chica's timers are the FIRST condition
+of their events, so they never pause - which is why they behaved.
+
+Now: every cove look moves his tick model by the time from the 1C click to
+the 4B click (unless he was seen at stage 3: then his timer was standing
+still anyway); after each run his ticks are anchored on the bang - his
+timer fired when he reached stage 3, stood still, and starts a full period
+again from the bang. The simulator pauses his timer the same way: there
+the previous brain let Foxy in on 24/60 4/20 nights (as live); the new one
+56/60 (11.9 % left; 2 Foxy, 2 power), 6th Night 57/60, Night 5 56/60.

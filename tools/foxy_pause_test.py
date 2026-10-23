@@ -58,8 +58,9 @@ def main() -> None:
     holds: list[tuple[float, float]] = []      # (start, end) of each cove view, real s
     last = None
     while not body.night_over() and len(bangs) < len(COVE_HOLDS) + 1:
-        body.wait_until(body.now() + 0.01)
-        power = body.last_power
+        # The raw readout (the bot's filtered power holds big drops back -
+        # and bangs ARE big drops).
+        power = vision.read_hud(body._observe()).power
         if power is None:
             continue
         if last is not None and power < last:
@@ -67,9 +68,8 @@ def main() -> None:
             off = t - math.floor(t)
             drop = last - power
             # A bang drops 1, 6, 11, 16 ... % (10 + 50 x earlier bangs units);
-            # anything else (a lost leading digit: "94 % -> 9 %") is a misread.
-            expected = 1 + 5 * len(bangs)
-            if abs(drop - expected) <= 1 and (0.2 < off < 0.8 or drop >= 2):
+            # a charge drops 1 % on a whole second.
+            if drop <= 25 and (0.2 < off < 0.8 or drop >= 2):
                 bang = real_now()
                 bangs.append(bang)
                 print(f"bang {len(bangs)} at {bang:8.3f} s real ({last}% -> {power}%)", flush=True)
@@ -87,7 +87,7 @@ def main() -> None:
                     holds.append((start, end))
                     print(f"   cove on screen {start:8.3f} - {end:8.3f} s ({end - start:.2f} s)", flush=True)
                 body.wait_until(body.now() + 0.5)
-                last = body.last_power
+                last = vision.read_hud(body._observe()).power
                 continue
         last = power
 

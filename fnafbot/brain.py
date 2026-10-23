@@ -371,6 +371,12 @@ class Brain:
         self.four_b_busy_at = -1e9         # when 4B was last seen occupied (blocks cove checks)
         self.foxy_fuse_from = math.inf     # earliest moment Foxy may have reached stage 3
         self.foxy_below3_seen_at = 0.0     # last time he was SEEN below stage 3 (his fuse started after it)
+        # How far Foxy's ticks have been pushed back (real seconds) - see
+        # _foxy_timer_paused.
+        self.foxy_phase_shift = 0.0
+        # After a run his ticks are anchored on the bang (real seconds, mod
+        # his period) - see _foxy_timer_restarted. None until his first run.
+        self.foxy_anchor: float | None = None
         self.view_intervals: list[tuple[float, float]] = []   # when a camera picture showed
         # Measured lag of the movement timers: (night time, lag) samples, and
         # the floor the tick model uses (see LAG_NOISE).
@@ -469,7 +475,12 @@ class Brain:
         measured phase plus the smallest lag the timers can have now. Every
         tick this gives is the EARLIEST the real tick can be; it may come up
         to _lag_spread() later."""
-        return rules.TICK_PERIOD[who], self.body.tick_phases.get(who, 0.0) + self.lag_lo
+        if who == "foxy" and self.foxy_anchor is not None:
+            # Anchored on his last bang: the timers' lag measured since does
+            # not move him (it was already in the bang's time).
+            return rules.TICK_PERIOD[who], self.foxy_anchor + self.foxy_phase_shift
+        shift = self.foxy_phase_shift if who == "foxy" else 0.0
+        return rules.TICK_PERIOD[who], self.body.tick_phases.get(who, 0.0) + self.lag_lo + shift
 
     def _lag_spread(self, at: float) -> float:
         """How much later than the tick model a tick at night time ``at``
@@ -522,7 +533,8 @@ class Brain:
         shift = self.body.real_to_game(new_lo) - self.body.real_to_game(self.lag_lo)
         for watch in (self.left, self.right):
             watch.last_tick_seen += shift
-        self.foxy_last_tick_seen += shift
+        if self.foxy_anchor is None:          # (anchored on a bang, his ticks do not move)
+            self.foxy_last_tick_seen += shift
         self.lag_lo = new_lo
 
     def _note_lag(self, whos: tuple[str, ...], seen_at: float) -> float | None:
@@ -1821,6 +1833,9 @@ class Brain:
         Returns the stage seen, or None if the picture was unreadable."""
         self.say("Checking Foxy (Pirate Cove)")
         self.body.select_camera("1C")
+        # From the click itself: the game switches on that click, and the
+        # wait for the new picture to show is not part of the pause.
+        cove_from = self.body.game_to_real(getattr(self.body, "camera_clicked_at", self.body.now()))
         self.camera_selected = "1C"
         view = self.body.read_camera("1C")
         if view["visible"] and view["foxy_stage"] == 3:
@@ -1831,6 +1846,11 @@ class Brain:
                 view = second
         self.body.select_camera("4B")
         self.camera_selected = "4B"
+        # His timer stood still while the cove showed - unless he was at
+        # stage 3, when it was standing still anyway (_foxy_timer_paused).
+        if not (view["visible"] and view["foxy_stage"] is not None and view["foxy_stage"] >= 3):
+            cove_to = self.body.game_to_real(getattr(self.body, "camera_clicked_at", self.body.now()))
+            self._foxy_timer_paused(cove_to - cove_from)
         if not view["visible"] or view["foxy_stage"] is None:
             return None
         self.foxy_stage = self.foxy_max_stage = view["foxy_stage"]
@@ -1893,6 +1913,36 @@ class Brain:
             planned_end = 0.0
         return max(self.body.now(), self._view_started + FREEZE_VIEW_SECONDS, planned_end,
                    max(first_relock, covering_relock) + 0.1 + FOXY_CLOCK_MARGIN)
+
+    def _foxy_timer_paused(self, seconds: float) -> None:
+        """Foxy's timer stood still for ``seconds`` (real): all his ticks
+        from now on come that much later.
+
+        His tick event ([191]) checks "viewing != 99" (99 is Pirate Cove,
+        event [141]) and "fox progress < 3" BEFORE its "every 5.01 seconds"
+        timer, and Clickteam only counts an "every" timer down while it is
+        evaluated - so it stands still while the cove is on screen. Measured
+        live (tools/foxy_pause_test.py): holding the cove 2.56 s moved his
+        ticks +2.54 s; without a hold, -0.13 s. Not knowing this, every cove
+        look of the bot (alerts, checks) pushed his real ticks away from its
+        flips, and on busy 4/20 nights he climbed a stage every few ticks."""
+        if seconds <= 0:
+            return
+        self.foxy_phase_shift += seconds
+        shift = self.body.real_to_game(seconds) - self.body.real_to_game(0.0)
+        self.foxy_last_tick_seen += shift
+        self.foxy_frozen_tick += shift
+
+    def _foxy_timer_restarted(self, at: float) -> None:
+        """Foxy has just run (bang on the door) at night time ``at``. His
+        timer fired at the tick that took him to stage 3 and then stood still
+        (fox progress >= 3) until now - so his next tick is one full period
+        from now (see _foxy_timer_paused)."""
+        period = rules.TICK_PERIOD["foxy"]
+        self.foxy_anchor = self.body.game_to_real(at) % period
+        self.foxy_phase_shift = 0.0          # cove pauses from now on add to it
+        self.foxy_last_tick_seen = at
+        self.foxy_frozen_tick = at
 
     def _foxy_can_attack(self, now: float) -> bool:
         """Could Foxy still reach the office before 6 AM? He attacks only
@@ -2003,8 +2053,11 @@ class Brain:
             self.camera_selected = "2A"
             self.body.wait_until(self.body.now() + 0.15)
             self._lower_camera()
-        # He bangs on the closed door 100 frames after starting to run.
-        self.body.wait_until(self.body.now() + rules.FOXY_RUN_FRAMES * rules.FRAME + 0.6)
+        # He bangs on the closed door 100 frames after starting to run - and
+        # his timer starts again from there.
+        bang_at = self.body.now() + rules.FOXY_RUN_FRAMES * rules.FRAME
+        self.body.wait_until(bang_at + 0.6)
+        self._foxy_timer_restarted(bang_at)
         self.foxy_emergency = False
         self.foxy_door_hold = False
         self.foxy_stage, self.foxy_max_stage = 0, 1      # he restarts at stage 0 or 1
