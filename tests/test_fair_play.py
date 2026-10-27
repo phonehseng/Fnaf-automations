@@ -13,8 +13,9 @@ from pathlib import Path
 PACKAGE = Path(__file__).resolve().parent.parent / "fnafbot"
 
 # Only the one-time setup step (assets.py) may open the game executable, and
-# only to copy out pictures; config.py defines its path, menu.py launches it.
-ALLOWED_TO_MENTION_GAME_EXE = {"assets.py", "config.py", "menu.py"}
+# only to copy out pictures; config.py defines its path, menu.py launches it,
+# and the launcher window shows the path and checks the file is there.
+ALLOWED_TO_MENTION_GAME_EXE = {"assets.py", "config.py", "menu.py", "launcher.py"}
 
 
 def _sources():
@@ -32,6 +33,14 @@ def test_only_setup_reads_the_game_exe():
     for name, text in _sources():
         if "GAME_EXE" in text:
             assert name in ALLOWED_TO_MENTION_GAME_EXE, f"{name} uses the game exe"
+
+
+def test_launcher_never_opens_a_file():
+    """The launcher only knows WHERE the game is: it never opens a file
+    itself (its settings go through config.py)."""
+    text = (PACKAGE / "launcher.py").read_text(encoding="utf-8")
+    for call in ("open(", "read_bytes", "read_text", "write_bytes"):
+        assert call not in text, f"launcher.py calls {call}"
 
 
 def test_menu_only_launches_the_exe():

@@ -189,6 +189,12 @@ def _only_copy_running() -> bool:
 
 
 def main() -> None:
+    # Started with no options (FNAFBot.exe double-clicked): open the launcher
+    # window, which runs this same program again with the chosen options.
+    if len(sys.argv) == 1:
+        from fnafbot import launcher
+        launcher.main()
+        return
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--setup", action="store_true", help="extract reference pictures from the game (one time)")
     parser.add_argument("--new-game", action="store_true", help="start a New Game (night 1)")
